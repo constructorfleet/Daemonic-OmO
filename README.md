@@ -24,7 +24,10 @@ To install the `omo-agents` command globally, run `bun add --global .` from this
 ```sh
 omo-agents --project ~/src/my-project
 omo-agents --project ~/src/my-project --state-dir /path/to/senpi-task
+omo-agents --wrap -- -c
 ```
+
+`--wrap` starts OmO and the viewer in side-by-side tmux panes, focused on OmO. Use tmux's pane switch shortcut (default `Ctrl-b`, then `o`) to move to the viewer and back. Arguments after `--` are passed to `omo`; omit them to start a new session. When run inside tmux, the wrapper switches to the new split session; otherwise it attaches to it.
 
 The viewer discovers the configured OmO Native agent directory and falls back to the legacy in-project `.omo/senpi-task` store when it contains task records. Use `--state-dir` if the store is somewhere else.
 
@@ -39,7 +42,7 @@ The viewer discovers the configured OmO Native agent directory and falls back to
 - `r`: refresh now
 - `q`: quit
 
-The task list follows the selected row as you move with `↑` / `↓`. The main-session view reads the root session transcript, and `j` / `k` scroll either root or agent output.
+The task list follows the selected row as you move with `↑` / `↓`. The main-session view reads the root session transcript, and `j` / `k` scroll either root or agent output. In wrap mode, switch to the OmO pane and use `/task-kill` to choose and cancel a task.
 
 The viewer refreshes task records and transcript logs every second by default. Set `--refresh-ms` from 250 to 10000 to change the interval. It only reads task-store and session files. To cancel a task, use OmO's `/task-kill` command in the owning OmO session; the external terminal control API does not expose task-specific cancellation.
 
