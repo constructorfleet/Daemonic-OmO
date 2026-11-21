@@ -25,15 +25,21 @@ export function resolveTaskStateDir(projectDir: string, options: StoreOptions = 
   const legacy = join(project, ".omo", "senpi-task")
   if (legacyStoreHasRecords(legacy)) return legacy
 
+  const agentDir = resolveAgentDir(options)
+  const projectName = basename(project).replace(/[^\p{L}\p{N}._-]/gu, "_") || "root"
+  const hash = createHash("sha256").update(project).digest("hex").slice(0, 12)
+  return join(agentDir, "projects", `${projectName}-${hash}`, "senpi-task")
+}
+
+export function resolveAgentDir(options: Pick<StoreOptions, "agentDir" | "env"> = {}): string {
+  if (options.agentDir !== undefined) return resolve(options.agentDir)
   const env = options.env ?? process.env
-  const agentDir = options.agentDir ?? firstNonEmpty(
+  const agentDir = firstNonEmpty(
     env.OMO_CODING_AGENT_DIR,
     env.SENPI_CODING_AGENT_DIR,
     env.PI_CODING_AGENT_DIR,
   ) ?? join(env.HOME ?? env.USERPROFILE ?? homedir(), ".omo", "agent")
-  const projectName = basename(project).replace(/[^\p{L}\p{N}._-]/gu, "_") || "root"
-  const hash = createHash("sha256").update(project).digest("hex").slice(0, 12)
-  return join(agentDir, "projects", `${projectName}-${hash}`, "senpi-task")
+  return resolve(agentDir)
 }
 
 export function loadTaskRecords(stateDir: string): TaskStoreSnapshot {
@@ -82,6 +88,11 @@ export function readTaskTranscript(stateDir: string, taskId: string): readonly s
   }
   const chosen = files.length > 2 ? [files[0], files.at(-1)] : files
   return chosen.flatMap((file) => parseSessionTranscript(readTail(join(sessionDir, file!), MAX_TRANSCRIPT_BYTES) ?? ""))
+}
+
+export function readRootSessionTranscript(agentDir: string, sessionId: string): readonly string[] {
+  if (!/^[A-Za-z0-9_-]+$/.test(sessionId)) return []
+  return parseSessionTranscript(readTail(join(agentDir, "sessions", `${sessionId}.jsonl`), MAX_TRANSCRIPT_BYTES) ?? "")
 }
 
 function readTail(path: string, maxBytes: number): string | undefined {

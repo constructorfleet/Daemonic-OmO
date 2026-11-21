@@ -8,14 +8,16 @@ import {
   openSelection,
   reconcileNavigation,
   returnToMain,
+  visibleNavigationItems,
   type NavigationState,
 } from "./navigation.js"
 import { projectTaskTree, type TaskRecord, type TaskTreeItem } from "./state.js"
-import { loadTaskRecords, readTaskTranscript } from "./storage.js"
+import { loadTaskRecords, readRootSessionTranscript, readTaskTranscript } from "./storage.js"
 import { safeText, visibleTranscript } from "./transcript.js"
 
 export interface ViewerOptions {
   readonly projectDir: string
+  readonly agentDir: string
   readonly stateDir: string
   readonly refreshMs: number
 }
@@ -79,12 +81,24 @@ export async function runViewer(options: ViewerOptions): Promise<void> {
     const selected = itemById().get(navigation.selectedId ?? "")
     const viewed = itemById().get(navigation.viewId ?? "")
     const selectedRoot = selected?.rootSessionId ?? viewed?.rootSessionId
-    const selectedTranscript = viewed?.kind === "task" ? readTaskTranscript(options.stateDir, viewed.id) : []
-    const maxTranscriptRows = Math.max(4, renderer.height - 13)
+    const selectedTranscript = viewed?.kind === "task"
+      ? readTaskTranscript(options.stateDir, viewed.id)
+      : viewed?.kind === "main"
+        ? readRootSessionTranscript(options.agentDir, viewed.rootSessionId)
+        : []
+    const maxTranscriptRows = Math.max(3, renderer.height - (viewed?.kind === "main" ? 24 : 22))
     const transcript = visibleTranscript(selectedTranscript, maxTranscriptRows, navigation.scrollOffset)
+    const visibleItems = visibleNavigationItems(items, navigation.selectedId, Math.max(1, renderer.height - 13))
+    const firstVisibleIndex = items.findIndex((item) => item.id === visibleItems[0]?.id)
+    const lastVisibleIndex = firstVisibleIndex + visibleItems.length
 
     header.content = `OMO AGENTS  •  ${safeText(options.projectDir)}  •  ${paused ? "paused" : `refresh ${options.refreshMs}ms`}${snapshot.invalidRecords > 0 ? `  •  ${snapshot.invalidRecords} unreadable` : ""}`
-    listText.content = renderTaskList(items, navigation.selectedId)
+    listText.content = renderTaskList(
+      visibleItems,
+      navigation.selectedId,
+      items.length > 0 && firstVisibleIndex > 0,
+      lastVisibleIndex < items.length,
+    )
     detailText.content = renderDetail(viewed, items, selectedRoot, selectedTranscript, transcript, lastReadError)
     renderer.requestRender()
   }
@@ -122,9 +136,9 @@ export async function runViewer(options: ViewerOptions): Promise<void> {
       return
     } else if (key.name === "p") paused = !paused
     else if (key.name === "g") navigation = followTranscript(navigation)
-    else if (key.name === "k" && itemById().get(navigation.viewId ?? "")?.kind === "task")
+    else if (key.name === "k" && itemById().has(navigation.viewId ?? ""))
       navigation = adjustScroll(navigation, 1)
-    else if (key.name === "j" && itemById().get(navigation.viewId ?? "")?.kind === "task")
+    else if (key.name === "j" && itemById().has(navigation.viewId ?? ""))
       navigation = adjustScroll(navigation, -1)
     else return
     render()
@@ -134,9 +148,14 @@ export async function runViewer(options: ViewerOptions): Promise<void> {
   render()
 }
 
-function renderTaskList(items: readonly TaskTreeItem[], selectedId: string | undefined): string {
-  if (items.length === 0) return "No task records yet.\n\nKeep this view open while OmO delegates."
-  const lines = ["SESSION / AGENT TREE", ""]
+function renderTaskList(
+  items: readonly TaskTreeItem[],
+  selectedId: string | undefined,
+  hasMoreAbove: boolean,
+  hasMoreBelow: boolean,
+): string {
+  if (items.length === 0) return "SESSION / AGENT TREE\n\nNo task records yet.\nKeep this view open while OmO delegates."
+  const lines = ["SESSION / AGENT TREE", ...(hasMoreAbove ? ["↑ more above"] : [])]
   for (const item of items) {
     const active = item.id === selectedId
     const prefix = active ? "› " : "  "
@@ -152,6 +171,7 @@ function renderTaskList(items: readonly TaskTreeItem[], selectedId: string | und
     lines.push(`${prefix}${indent}${glyph} ${name}`)
     lines.push(`    ${indent}${task.status.toUpperCase()}  ${elapsed(task)}`)
   }
+  if (hasMoreBelow) lines.push("↓ more below")
   return lines.join("\n")
 }
 
@@ -180,6 +200,10 @@ function renderDetail(
       "",
       "Choose an agent from the left and press Enter to follow its transcript.",
       "Escape from any agent view returns here.",
+      "",
+      `TRANSCRIPT  ${allTranscript.length} lines`,
+      "",
+      ...(visible.length === 0 ? ["(waiting for main-session output…)"] : visible),
     ].join("\n")
   }
 

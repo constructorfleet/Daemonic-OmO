@@ -3,7 +3,7 @@
 import { resolve } from "node:path"
 
 import { runViewer } from "./viewer.js"
-import { resolveTaskStateDir } from "./storage.js"
+import { resolveAgentDir, resolveTaskStateDir } from "./storage.js"
 
 const HELP = `OmO Agent Viewer
 
@@ -66,8 +66,9 @@ export async function main(): Promise<void> {
       process.stdout.write(HELP)
       return
     }
-    const stateDir = resolveTaskStateDir(options.projectDir, { stateDir: options.stateDir })
-    await runViewer({ projectDir: options.projectDir, stateDir, refreshMs: options.refreshMs })
+    const agentDir = resolveAgentDir()
+    const stateDir = resolveTaskStateDir(options.projectDir, { stateDir: options.stateDir, agentDir })
+    await runViewer({ projectDir: options.projectDir, agentDir, stateDir, refreshMs: options.refreshMs })
   } catch (error) {
     process.stderr.write(`${error instanceof Error ? error.message : String(error)}\n\nRun omo-agents --help for usage.\n`)
     process.exitCode = 2

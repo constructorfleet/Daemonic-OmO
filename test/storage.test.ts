@@ -3,7 +3,7 @@ import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { afterEach, describe, expect, test } from "bun:test"
 
-import { loadTaskRecords, readTaskTranscript, resolveTaskStateDir } from "../src/storage"
+import { loadTaskRecords, readRootSessionTranscript, readTaskTranscript, resolveTaskStateDir } from "../src/storage"
 
 const roots: string[] = []
 const temp = (): string => {
@@ -76,5 +76,22 @@ describe("readTaskTranscript", () => {
 
   test("#given a task log that disappears #when read #then it returns an empty transcript", () => {
     expect(readTaskTranscript(temp(), "st_1")).toEqual([])
+  })
+})
+
+describe("readRootSessionTranscript", () => {
+  test("#given a root session transcript #when read #then it returns assistant output", () => {
+    const agentDir = temp()
+    mkdirSync(join(agentDir, "sessions"))
+    writeFileSync(
+      join(agentDir, "sessions", "main-1.jsonl"),
+      `${JSON.stringify({ type: "message", message: { role: "assistant", content: [{ type: "text", text: "root answer" }] } })}\n`,
+    )
+    expect(readRootSessionTranscript(agentDir, "main-1")).toEqual(["assistant: root answer"])
+  })
+
+  test("#given a missing or unsafe session id #when read #then it returns no transcript", () => {
+    expect(readRootSessionTranscript(temp(), "../private")).toEqual([])
+    expect(readRootSessionTranscript(temp(), "missing")).toEqual([])
   })
 })

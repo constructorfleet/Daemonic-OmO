@@ -39,7 +39,9 @@ The viewer discovers the configured OmO Native agent directory and falls back to
 - `r`: refresh now
 - `q`: quit
 
-The viewer refreshes task records and transcript logs every second by default. Set `--refresh-ms` from 250 to 10000 to change the interval. It only reads task-store files.
+The task list follows the selected row as you move with `↑` / `↓`. The main-session view reads the root session transcript, and `j` / `k` scroll either root or agent output.
+
+The viewer refreshes task records and transcript logs every second by default. Set `--refresh-ms` from 250 to 10000 to change the interval. It only reads task-store and session files. To cancel a task, use OmO's `/task-kill` command in the owning OmO session; the external terminal control API does not expose task-specific cancellation.
 
 ## Development
 

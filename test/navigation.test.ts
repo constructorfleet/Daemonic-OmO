@@ -1,6 +1,13 @@
 import { describe, expect, test } from "bun:test"
 
-import { initialNavigation, moveSelection, openSelection, returnToMain, type NavigationItem } from "../src/navigation"
+import {
+  initialNavigation,
+  moveSelection,
+  openSelection,
+  returnToMain,
+  visibleNavigationItems,
+  type NavigationItem,
+} from "../src/navigation"
 
 const items: NavigationItem[] = [
   { id: "main:main-1", kind: "main" },
@@ -26,5 +33,15 @@ describe("agent view navigation", () => {
     const moved = moveSelection(state, 1, items)
     expect(moved.selectedId).toBe("st_2")
     expect(moved.viewId).toBe("st_1")
+  })
+
+  test("#given more tasks than fit #when selection moves past the viewport #then the selected task remains visible", () => {
+    const many = Array.from({ length: 12 }, (_, index) => ({
+      id: `st_${index}`,
+      kind: "task" as const,
+      rootSessionId: "main-1",
+    }))
+    const visible = visibleNavigationItems(many, "st_10", 8)
+    expect(visible.map((item) => item.id)).toEqual(["st_8", "st_9", "st_10", "st_11"])
   })
 })
