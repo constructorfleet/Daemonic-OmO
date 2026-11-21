@@ -19,7 +19,7 @@ bun run build
 bun run start
 ```
 
-To install the `omo-agents` command globally, run `bun link --global` from this directory. Then run it inside an OmO project; the default project is the current directory.
+To install the `omo-agents` command globally, run `bun add --global .` from this directory. Then run it inside an OmO project; the default project is the current directory. (`bun link --global` only registers this package so projects can link it as a dependency.)
 
 ```sh
 omo-agents --project ~/src/my-project
