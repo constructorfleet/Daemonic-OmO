@@ -1,6 +1,8 @@
 import { afterEach, describe, expect, test } from "bun:test"
-import { DOC_PROVIDER, type DocFrame } from "../../src/api/services"
+import { appendFileSync, mkdirSync, writeFileSync } from "node:fs"
+import { join } from "node:path"
 import { ulid } from "../../src/core/ids"
+import { sessionDocId } from "../../src/observer/doc-factory"
 import type { Project, UserId } from "../../src/core/types"
 import { SeededRng } from "../support/fakes"
 import type { E2eServer } from "../support/e2e-server"
@@ -134,15 +136,11 @@ describe("gap-free SSE stream", () => {
     const alice = await member(target, "alice")
     const bob = await member(target, "bob")
     const aliceHead = target.app.ctx.feed.head({ kind: "user", userId: alice.user.id })
-    const emits = new Map<string, (frame: DocFrame) => void>()
-    const closed: string[] = []
-    target.app.ctx.services.provide(DOC_PROVIDER, {
-      open: (request, emitFrame) => {
-        if (request.docId !== "run:demo") return null
-        emits.set(request.docId, emitFrame)
-        return () => closed.push(request.docId)
-      },
-    })
+    const sessionDir = join(alice.user.agentDir, "sessions", "--work--")
+    const sessionFile = join(sessionDir, "2026-11-25T08-00-00-000Z_sess-stream.jsonl")
+    mkdirSync(sessionDir, { recursive: true })
+    writeFileSync(sessionFile, `${JSON.stringify({ type: "session", version: 3, id: "sess-stream", cwd: "/work" })}\n`)
+    const docId = sessionDocId(alice.user.agentDir, "sess-stream")
     const reader = await SseReader.open(target, memberHeaders(target, alice))
     const streamId = String(field((await reader.next())?.data, "streamId"))
     const docsUrl = `${target.url}/api/v1/stream/${streamId}/docs`
@@ -150,33 +148,32 @@ describe("gap-free SSE stream", () => {
     const subscribed = await fetch(docsUrl, {
       method: "POST",
       headers: memberHeaders(target, alice),
-      body: JSON.stringify({ docId: "run:demo", epoch: 3, rev: 41 }),
+      body: JSON.stringify({ docId, epoch: 3, rev: 41 }),
     })
     const foreign = await fetch(docsUrl, {
       method: "POST",
       headers: memberHeaders(target, bob),
-      body: JSON.stringify({ docId: "run:demo" }),
+      body: JSON.stringify({ docId }),
     })
     const unknownDoc = await fetch(docsUrl, {
       method: "POST",
       headers: memberHeaders(target, alice),
-      body: JSON.stringify({ docId: "run:missing" }),
+      body: JSON.stringify({ docId: "session:000000000000:sess-missing" }),
     })
-    emits.get("run:demo")?.({ docId: "run:demo", epoch: 3, fromRev: 41, toRev: 42, ops: [{ op: "turn.add" }] })
     emit(target, alice.user.id, 1)
     const [doc, entity] = await reader.take(2)
-    const removed = await fetch(`${docsUrl}/run:demo`, { method: "DELETE", headers: memberHeaders(target, alice) })
+    const removed = await fetch(`${docsUrl}/${encodeURIComponent(docId)}`, { method: "DELETE", headers: memberHeaders(target, alice) })
+    appendFileSync(sessionFile, `${JSON.stringify({ type: "message", id: "late", message: { role: "assistant", content: [] } })}\n`)
+    target.clock.advance(1_000)
+    emit(target, alice.user.id, 1)
+    const [afterRemoval] = await reader.take(1)
 
     expect(subscribed.status).toBe(200)
     expect([foreign.status, unknownDoc.status]).toEqual([404, 404])
-    expect(doc).toEqual({
-      id: null,
-      event: "doc",
-      data: { docId: "run:demo", epoch: 3, fromRev: 41, toRev: 42, ops: [{ op: "turn.add" }] },
-    })
+    expect(doc).toMatchObject({ id: null, event: "doc", data: { docId, fromRev: 0, toRev: 0, ops: [{ op: "snapshot" }] } })
     expect(entity).toMatchObject({ id: String(aliceHead + 1), event: "entity" })
     expect(removed.status).toBe(204)
-    expect(closed).toEqual(["run:demo"])
+    expect(afterRemoval).toMatchObject({ id: String(aliceHead + 2), event: "entity" })
     await reader.cancel()
   })
 

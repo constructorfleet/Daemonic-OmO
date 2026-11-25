@@ -1,0 +1,3 @@
+{"type":"assistant_message","payload":{"text":"Starting.\nLooking around."}}
+{"type":"tool_execution","payload":{"tool":"bash","is_error":true}}
+{"type":"child_error","payload":{"message":"session crashed"}}

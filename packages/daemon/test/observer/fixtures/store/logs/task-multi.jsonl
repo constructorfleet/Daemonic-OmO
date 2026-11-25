@@ -1,0 +1,5 @@
+{"type":"assistant_message","payload":{"text":"First file turn."}}
+{"type":"tool_execution","payload":{"tool":"grep","is_error":false}}
+{"type":"child_error","payload":{"message":"provider overloaded"}}
+{"type":"transition_applied","payload":{"from":"running","to":"running"}}
+{"type":"child_error","payload":{"message":"provider overloaded"}}

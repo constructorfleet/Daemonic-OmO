@@ -50,5 +50,50 @@ export function readLimits(reader: Reader, raw: Record<string, unknown>): Limits
       raw.loopCheckTimeoutMs,
       DEFAULT_LIMITS.loopCheckTimeoutMs,
     ),
+    observerActivePollMs: reader.integer(
+      "limits.observerActivePollMs",
+      raw.observerActivePollMs,
+      DEFAULT_LIMITS.observerActivePollMs,
+    ),
+    observerIdlePollMs: reader.integer(
+      "limits.observerIdlePollMs",
+      raw.observerIdlePollMs,
+      DEFAULT_LIMITS.observerIdlePollMs,
+    ),
+    observerMaxOpenDocs: reader.integer(
+      "limits.observerMaxOpenDocs",
+      raw.observerMaxOpenDocs,
+      DEFAULT_LIMITS.observerMaxOpenDocs,
+    ),
+    observerIdleEvictMs: reader.integer(
+      "limits.observerIdleEvictMs",
+      raw.observerIdleEvictMs,
+      DEFAULT_LIMITS.observerIdleEvictMs,
+    ),
+    observerMaxTurns: reader.integer(
+      "limits.observerMaxTurns",
+      raw.observerMaxTurns,
+      DEFAULT_LIMITS.observerMaxTurns,
+    ),
+    observerMaxEventLines: reader.integer(
+      "limits.observerMaxEventLines",
+      raw.observerMaxEventLines,
+      DEFAULT_LIMITS.observerMaxEventLines,
+    ),
+    observerMaxOlderTurns: reader.integer(
+      "limits.observerMaxOlderTurns",
+      raw.observerMaxOlderTurns,
+      DEFAULT_LIMITS.observerMaxOlderTurns,
+    ),
+    observerPageMaxTurns: reader.integer(
+      "limits.observerPageMaxTurns",
+      raw.observerPageMaxTurns,
+      DEFAULT_LIMITS.observerPageMaxTurns,
+    ),
+    observerImageCacheBytes: reader.integer(
+      "limits.observerImageCacheBytes",
+      raw.observerImageCacheBytes,
+      DEFAULT_LIMITS.observerImageCacheBytes,
+    ),
   }
 }

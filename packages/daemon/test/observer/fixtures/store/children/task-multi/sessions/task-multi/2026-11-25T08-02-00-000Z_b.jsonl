@@ -1,0 +1,2 @@
+{"type":"session","version":3,"id":"task-multi","timestamp":"2026-11-25T08:01:00.000Z","cwd":"/tmp/project-fixture"}
+{"type":"message","id":"middle","timestamp":"2026-11-25T08:02:01.000Z","parentId":null,"message":{"role":"assistant","content":[{"type":"text","text":"Middle file is skipped."}],"provider":"anthropic","model":"claude-fixture","stopReason":"toolUse"}}

@@ -1,0 +1,14 @@
+{
+  "version": 1,
+  "id": "sch_abcdefgh1234",
+  "sessionId": "session-fixture",
+  "sessionFile": null,
+  "cwd": "/tmp/project-fixture",
+  "prompt": "Inspect the project files.",
+  "createdAt": 1790000000000,
+  "dueAt": 1790000060000,
+  "everyMs": null,
+  "fireCount": 0,
+  "lastFiredAt": null,
+  "lastError": null
+}

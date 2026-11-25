@@ -112,6 +112,18 @@ const CASES: readonly {
     message: "limits.machineMaxRunning",
   },
   {
+    name: "observerMaxOpenDocs rejects zero",
+    jsonc: `{ "limits": { "observerMaxOpenDocs": 0 } }`,
+    paths: ["limits.observerMaxOpenDocs"],
+    message: "limits.observerMaxOpenDocs",
+  },
+  {
+    name: "observerImageCacheBytes rejects a negative size",
+    jsonc: `{ "limits": { "observerImageCacheBytes": -1 } }`,
+    paths: ["limits.observerImageCacheBytes"],
+    message: "limits.observerImageCacheBytes",
+  },
+  {
     name: "omo.pluginRoot must be absolute",
     jsonc: `{ "omo": { "pluginRoot": "relative/plugin" } }`,
     paths: ["omo.pluginRoot"],

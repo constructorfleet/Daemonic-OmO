@@ -1,0 +1,10 @@
+{
+  "created_at": "2026-11-25T08:01:00.000Z",
+  "task_id": "task-multi",
+  "parent_session_id": "sess-basic",
+  "root_session_id": "sess-basic",
+  "child_session_id": "child-multi",
+  "status": "running",
+  "name": "Multi-file child",
+  "category": "quick"
+}

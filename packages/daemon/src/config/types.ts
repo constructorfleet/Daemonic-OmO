@@ -68,6 +68,15 @@ export interface LimitsConfig {
   readonly maxKeptWorktreesPerProject: number
   readonly auditRetentionDays: number
   readonly loopCheckTimeoutMs: number
+  readonly observerActivePollMs: number
+  readonly observerIdlePollMs: number
+  readonly observerMaxOpenDocs: number
+  readonly observerIdleEvictMs: number
+  readonly observerMaxTurns: number
+  readonly observerMaxEventLines: number
+  readonly observerMaxOlderTurns: number
+  readonly observerPageMaxTurns: number
+  readonly observerImageCacheBytes: number
 }
 
 export interface OmoConfig {
@@ -132,4 +141,13 @@ export const DEFAULT_LIMITS: LimitsConfig = {
   maxKeptWorktreesPerProject: 50,
   auditRetentionDays: 180,
   loopCheckTimeoutMs: 600_000,
+  observerActivePollMs: 1_000,
+  observerIdlePollMs: 10_000,
+  observerMaxOpenDocs: 32,
+  observerIdleEvictMs: 300_000,
+  observerMaxTurns: 500,
+  observerMaxEventLines: 10_000,
+  observerMaxOlderTurns: 5_000,
+  observerPageMaxTurns: 500,
+  observerImageCacheBytes: 67_108_864,
 }

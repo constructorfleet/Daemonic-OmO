@@ -54,6 +54,15 @@ describe("loadConfig defaults", () => {
         maxKeptWorktreesPerProject: 50,
         auditRetentionDays: 180,
         loopCheckTimeoutMs: 600_000,
+        observerActivePollMs: 1_000,
+        observerIdlePollMs: 10_000,
+        observerMaxOpenDocs: 32,
+        observerIdleEvictMs: 300_000,
+        observerMaxTurns: 500,
+        observerMaxEventLines: 10_000,
+        observerMaxOlderTurns: 5_000,
+        observerPageMaxTurns: 500,
+        observerImageCacheBytes: 67_108_864,
       },
       omo: { bin: TEST_OMO.bin, pluginRoot: TEST_OMO.pluginRoot },
     })
@@ -125,6 +134,38 @@ describe("loadConfig defaults", () => {
     expect(loaded.config.oidc?.adminSubjects).toEqual([])
     expect(loaded.config.users.defaultAgentDirRoot).toBe(`${TEST_HOME_DIR}/agents`)
     expect(loaded.config.users.bootstrapAdmin.agentDir).toBe(`${TEST_HOME_DIR}/omo-agent`)
+  })
+
+  test("observer limits parse from config.jsonc", async () => {
+    const home = await tempHome()
+    await home.writeConfig(`{
+      "limits": {
+        "observerActivePollMs": 250,
+        "observerIdlePollMs": 2000,
+        "observerMaxOpenDocs": 4,
+        "observerIdleEvictMs": 9000,
+        "observerMaxTurns": 50,
+        "observerMaxEventLines": 100,
+        "observerMaxOlderTurns": 25,
+        "observerPageMaxTurns": 20,
+        "observerImageCacheBytes": 1048576
+      }
+    }`)
+
+    const loaded = await load(home.home)
+
+    expect(loaded.config.limits).toMatchObject({
+      observerActivePollMs: 250,
+      observerIdlePollMs: 2_000,
+      observerMaxOpenDocs: 4,
+      observerIdleEvictMs: 9_000,
+      observerMaxTurns: 50,
+      observerMaxEventLines: 100,
+      observerMaxOlderTurns: 25,
+      observerPageMaxTurns: 20,
+      observerImageCacheBytes: 1_048_576,
+    })
+    expect(loaded.config.limits.sessionTtlMs).toBe(43_200_000)
   })
 
   test("the home layout is private: 0700 directories, no database file yet", async () => {

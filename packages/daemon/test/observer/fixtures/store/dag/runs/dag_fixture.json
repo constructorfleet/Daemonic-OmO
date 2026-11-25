@@ -1,0 +1,63 @@
+{
+  "schemaVersion": 1,
+  "checkpointSeq": 4,
+  "runId": "dag_fixture",
+  "runKey": "audit",
+  "name": "Fixture audit",
+  "parentSessionId": "sess-basic",
+  "rootSessionId": "sess-basic",
+  "definitionFingerprint": "scrubbed",
+  "definition": {
+    "key": "audit",
+    "name": "Fixture audit",
+    "nodes": [
+      {
+        "id": "inspect",
+        "label": "Inspect project files",
+        "prompt": "Inspect the project files.",
+        "route": {
+          "kind": "category",
+          "category": "quick"
+        },
+        "dependsOn": [],
+        "effectivePrompt": "Inspect the project files."
+      }
+    ]
+  },
+  "status": "running",
+  "generation": 2,
+  "createdAt": "2026-11-25T08:00:00.000Z",
+  "updatedAt": "2026-11-25T08:01:00.000Z",
+  "startedAt": "2026-11-25T08:00:01.000Z",
+  "nodes": [
+    {
+      "id": "inspect",
+      "label": "Inspect project files",
+      "prompt": "Inspect the project files.",
+      "route": {
+        "kind": "category",
+        "category": "quick"
+      },
+      "dependsOn": [],
+      "state": "running",
+      "attempt": 1,
+      "createdAt": "2026-11-25T08:00:00.000Z",
+      "taskId": "task-multi",
+      "startedAt": "2026-11-25T08:00:01.000Z"
+    }
+  ],
+  "edges": [],
+  "waves": [
+    {
+      "index": 0,
+      "nodeIds": [
+        "inspect"
+      ]
+    }
+  ],
+  "criticalPath": [
+    "inspect"
+  ],
+  "bottlenecks": [],
+  "diagnostics": []
+}
