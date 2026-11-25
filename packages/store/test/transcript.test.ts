@@ -148,7 +148,7 @@ describe("formatSessionTranscript", () => {
     )
     expect(line).toEndWith('target.ts"')
     expect(line).toContain("...")
-    expect(line!.length).toBeLessThan(140)
+    expect(line?.length).toBeLessThan(140)
   })
 })
 

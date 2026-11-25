@@ -181,7 +181,7 @@ function firstMatch(lines: readonly string[], pattern: RegExp): RegExpExecArray 
   return undefined
 }
 
-function lastTodoReport(turns: readonly TranscriptTurn[]): TodoState | undefined {
+export function lastTodoReport(turns: readonly TranscriptTurn[]): TodoState | undefined {
   for (let turnIndex = turns.length - 1; turnIndex >= 0; turnIndex -= 1) {
     const results = turns[turnIndex]?.results ?? []
     for (let index = results.length - 1; index >= 0; index -= 1) {

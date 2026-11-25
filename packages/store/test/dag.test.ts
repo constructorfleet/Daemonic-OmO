@@ -4,7 +4,7 @@ import { join } from "node:path"
 import { afterEach, describe, expect, test } from "bun:test"
 
 import { decodeDagRun, orderDagNodes, type DagNodeRecord, type DagRunRecord } from "../src/dag"
-import { loadDagRuns, readTaskActivity } from "../src/task-store"
+import { loadDagRuns, readTaskActivity } from "../src/index"
 
 const roots: string[] = []
 const temp = (): string => {

@@ -1,4 +1,4 @@
-import type { TaskTreeItem } from "./state.js"
+import type { TaskTreeItem } from "@omo-daemonic/store"
 
 export type NavigationItem = Pick<TaskTreeItem, "id" | "kind" | "rootSessionId">
 

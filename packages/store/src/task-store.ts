@@ -1,11 +1,11 @@
-import { createHash } from "node:crypto"
-import { closeSync, existsSync, fstatSync, openSync, readFileSync, readdirSync, readSync, realpathSync, statSync, type Dirent } from "node:fs"
-import { homedir } from "node:os"
-import { basename, join, resolve } from "node:path"
+import { closeSync, fstatSync, openSync, readFileSync, readdirSync, readSync, statSync } from "node:fs"
+import { join } from "node:path"
 
 import { decodeDagRun, type DagRunRecord } from "./dag.js"
 import { decodeTaskRecord, type TaskRecord } from "./state.js"
 import { parseTerminals } from "./terminals.js"
+import type { StoreOptions } from "./agent-dir.js"
+import { findRootSessionFile, readSessionHeader } from "./session-files.js"
 import {
   buildEventDocument,
   buildTranscriptDocument,
@@ -24,12 +24,6 @@ export interface TranscriptReadOptions {
   readonly maxBytes?: number
 }
 
-export interface StoreOptions {
-  readonly stateDir?: string
-  readonly agentDir?: string
-  readonly env?: Readonly<Record<string, string | undefined>>
-}
-
 export interface TaskStoreSnapshot {
   readonly records: readonly TaskRecord[]
   readonly invalidRecords: number
@@ -38,29 +32,6 @@ export interface TaskStoreSnapshot {
 export interface DagStoreSnapshot {
   readonly runs: readonly DagRunRecord[]
   readonly invalidRuns: number
-}
-
-export function resolveTaskStateDir(projectDir: string, options: StoreOptions = {}): string {
-  if (options.stateDir !== undefined) return resolve(options.stateDir)
-  const project = canonicalProjectPath(projectDir)
-  const legacy = join(project, ".omo", "senpi-task")
-  if (legacyStoreHasRecords(legacy)) return legacy
-
-  const agentDir = resolveAgentDir(options)
-  const projectName = basename(project).replace(/[^\p{L}\p{N}._-]/gu, "_") || "root"
-  const hash = createHash("sha256").update(project).digest("hex").slice(0, 12)
-  return join(agentDir, "projects", `${projectName}-${hash}`, "senpi-task")
-}
-
-export function resolveAgentDir(options: Pick<StoreOptions, "agentDir" | "env"> = {}): string {
-  if (options.agentDir !== undefined) return resolve(options.agentDir)
-  const env = options.env ?? process.env
-  const agentDir = firstNonEmpty(
-    env.OMO_CODING_AGENT_DIR,
-    env.SENPI_CODING_AGENT_DIR,
-    env.PI_CODING_AGENT_DIR,
-  ) ?? join(env.HOME ?? env.USERPROFILE ?? homedir(), ".omo", "agent")
-  return resolve(agentDir)
 }
 
 export function loadTaskRecords(stateDir: string): TaskStoreSnapshot {
@@ -177,13 +148,11 @@ export function readRootDocument(
 ): TranscriptDocument {
   if (!isSafeId(sessionId)) return buildEventDocument([])
   const maxBytes = options.maxBytes ?? DEFAULT_MAX_TRANSCRIPT_BYTES
-  const files = findRootSessionFiles(agentDir, sessionId)
-  if (files.length === 0) return buildTranscriptDocument([])
-  const chosen = files.length > 2 ? [files[0]!, files[files.length - 1]!] : files
-  const texts = chosen
-    .map((file) => readTail(file, maxBytes))
-    .filter((text): text is string => text !== undefined)
-  const text = texts.join("")
+  const file = findRootSessionFile(agentDir, sessionId)
+  if (file === undefined) return buildTranscriptDocument([])
+  const header = readSessionHeader(file)
+  if (header !== undefined && header.id !== sessionId) return buildTranscriptDocument([])
+  const text = readTail(file, maxBytes) ?? ""
   return withTerminals(buildTranscriptDocument(parseSessionTurns(text)), text)
 }
 
@@ -191,40 +160,6 @@ function withTerminals(document: TranscriptDocument, text: string): TranscriptDo
   if (text.length === 0) return document
   const terminals = parseTerminals(text)
   return terminals.items.length === 0 && terminals.sessionState === undefined ? document : { ...document, terminals }
-}
-
-/**
- * Root sessions live under `sessions/<encoded-project>/<timestamp>_<sessionId>.jsonl`.
- * Older stores kept them flat at `sessions/<sessionId>.jsonl`, so check both.
- */
-function findRootSessionFiles(agentDir: string, sessionId: string): readonly string[] {
-  const sessionsDir = join(agentDir, "sessions")
-  const files: string[] = []
-  const flat = join(sessionsDir, `${sessionId}.jsonl`)
-  if (existsSync(flat)) files.push(flat)
-  let entries: Dirent[]
-  try {
-    entries = readdirSync(sessionsDir, { withFileTypes: true })
-  } catch (error) {
-    if (isMissing(error)) return files
-    throw error
-  }
-  for (const entry of entries) {
-    if (!entry.isDirectory()) continue
-    const directory = join(sessionsDir, entry.name)
-    let names: string[]
-    try {
-      names = readdirSync(directory)
-    } catch {
-      continue
-    }
-    for (const name of names) {
-      if (name === `${sessionId}.jsonl` || name.endsWith(`_${sessionId}.jsonl`)) {
-        files.push(join(directory, name))
-      }
-    }
-  }
-  return files.sort()
 }
 
 function readChildSessionText(stateDir: string, taskId: string, maxBytes: number): string | undefined {
@@ -236,9 +171,9 @@ function readChildSessionText(stateDir: string, taskId: string, maxBytes: number
     if (isMissing(error)) return undefined
     throw error
   }
-  const chosen = files.length > 2 ? [files[0], files.at(-1)] : files
+  const chosen = files.length > 2 ? [files[0], files.at(-1)].filter((file): file is string => file !== undefined) : files
   const texts = chosen
-    .map((file) => readTail(join(sessionDir, file!), maxBytes))
+    .map((file) => readTail(join(sessionDir, file), maxBytes))
     .filter((text): text is string => text !== undefined)
   return texts.length === 0 ? undefined : texts.join("")
 }
@@ -273,29 +208,6 @@ function readTail(path: string, maxBytes: number): string | undefined {
 
 function isSafeId(value: string): boolean {
   return /^[A-Za-z0-9_-]+$/.test(value)
-}
-
-function legacyStoreHasRecords(path: string): boolean {
-  if (!existsSync(path)) return false
-  if (existsSync(join(path, ".in-project"))) return true
-  try {
-    return readdirSync(join(path, "tasks")).some((file) => file.endsWith(".json"))
-  } catch {
-    return false
-  }
-}
-
-function canonicalProjectPath(projectDir: string): string {
-  const absolute = resolve(projectDir)
-  try {
-    return realpathSync.native(absolute)
-  } catch {
-    return absolute
-  }
-}
-
-function firstNonEmpty(...values: (string | undefined)[]): string | undefined {
-  return values.map((value) => value?.trim()).find((value) => value !== undefined && value.length > 0)
 }
 
 function isMissing(error: unknown): boolean {

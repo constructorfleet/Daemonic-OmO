@@ -7,11 +7,12 @@
     "omo-agents": "./dist/main.js"
   },
   "scripts": {
-    "build": "tsc -p tsconfig.json",
+    "build": "bun build src/main.ts --target=bun --outfile dist/main.js --external @opentui/core",
     "test": "bun test",
     "start": "bun src/main.ts"
   },
   "dependencies": {
+    "@omo-daemonic/store": "workspace:*",
     "@opentui/core": "0.9.7"
   },
   "devDependencies": {

@@ -1,9 +1,6 @@
 import { describe, expect, test } from "bun:test"
 
-import type { DagNodeRecord, DagRunRecord } from "../src/dag"
-import { projectTaskTree, type TaskRecord, type TaskTreeItem } from "../src/state"
-import { buildTranscriptDocument, type TranscriptDocument, type TranscriptTurn } from "../src/transcript"
-import type { TerminalSnapshot } from "../src/terminals"
+import { buildTranscriptDocument, projectTaskTree, type DagNodeRecord, type DagRunRecord, type TaskRecord, type TaskTreeItem, type TerminalSnapshot, type TranscriptDocument, type TranscriptTurn } from "@omo-daemonic/store"
 import {
   RAIL_COLOR,
   RAIL_INACTIVE,
