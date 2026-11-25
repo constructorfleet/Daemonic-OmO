@@ -120,5 +120,29 @@ export function readLimits(reader: Reader, raw: Record<string, unknown>): Limits
       raw.omoCommandStderrTailChars,
       DEFAULT_LIMITS.omoCommandStderrTailChars,
     ),
+    schedulerMaxTickIntervalMs: reader.integer(
+      "limits.schedulerMaxTickIntervalMs",
+      raw.schedulerMaxTickIntervalMs,
+      DEFAULT_LIMITS.schedulerMaxTickIntervalMs,
+      1,
+    ),
+    schedulerClockJumpMs: reader.integer(
+      "limits.schedulerClockJumpMs",
+      raw.schedulerClockJumpMs,
+      DEFAULT_LIMITS.schedulerClockJumpMs,
+      0,
+    ),
+    scheduleHorizonMs: reader.integer(
+      "limits.scheduleHorizonMs",
+      raw.scheduleHorizonMs,
+      DEFAULT_LIMITS.scheduleHorizonMs,
+      1,
+    ),
+    schedulePreviewMaxCount: reader.integer(
+      "limits.schedulePreviewMaxCount",
+      raw.schedulePreviewMaxCount,
+      DEFAULT_LIMITS.schedulePreviewMaxCount,
+      1,
+    ),
   }
 }

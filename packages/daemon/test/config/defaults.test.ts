@@ -32,6 +32,10 @@ describe("loadConfig defaults", () => {
         overlap: "skip",
         misfire: "fire_once",
         misfireGraceMs: 3_600_000,
+        skipMisfireGraceMs: 60_000,
+        onceMisfireGraceMs: 86_400_000,
+        queueMax: 1,
+        queueMinExpiryMs: 3_600_000,
         maxCatchup: 50,
         readBytes: 4_194_304,
       },
@@ -67,6 +71,10 @@ describe("loadConfig defaults", () => {
         threadQueueTtlMs: 86_400_000,
         omoCommandTimeoutMs: 120_000,
         omoCommandStderrTailChars: 500,
+        schedulerMaxTickIntervalMs: 30_000,
+        schedulerClockJumpMs: 5_000,
+        scheduleHorizonMs: 157_680_000_000,
+        schedulePreviewMaxCount: 1_000,
       },
       omo: { bin: TEST_OMO.bin, pluginRoot: TEST_OMO.pluginRoot },
     })
@@ -94,6 +102,7 @@ describe("loadConfig defaults", () => {
       "listen": { "host": "127.0.0.1", "port": 9123 },
       "users": { "allowSelfSignup": true },
       "defaults": { "maxRunning": 5, "overlap": "queue" },
+      "limits": { "schedulePreviewMaxCount": 24 },
       "trustedProxies": ["10.0.0.2"],
     }`)
 
@@ -112,6 +121,7 @@ describe("loadConfig defaults", () => {
     expect(loaded.config.defaults.maxRunning).toBe(5)
     expect(loaded.config.defaults.overlap).toBe("queue")
     expect(loaded.config.defaults.misfire).toBe("fire_once")
+    expect(loaded.config.limits.schedulePreviewMaxCount).toBe(24)
     expect(loaded.config.trustedProxies).toEqual(["10.0.0.2"])
     expect(loaded.config.hardCaps.maxRunning).toBe(32)
   })

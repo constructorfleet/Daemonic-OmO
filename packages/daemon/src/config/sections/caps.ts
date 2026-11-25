@@ -92,6 +92,25 @@ export function readDefaults(
       DEFAULT_DEFAULTS.misfireGraceMs,
       0,
     ),
+    skipMisfireGraceMs: reader.integer(
+      "defaults.skipMisfireGraceMs",
+      raw.skipMisfireGraceMs,
+      DEFAULT_DEFAULTS.skipMisfireGraceMs,
+      0,
+    ),
+    onceMisfireGraceMs: reader.integer(
+      "defaults.onceMisfireGraceMs",
+      raw.onceMisfireGraceMs,
+      DEFAULT_DEFAULTS.onceMisfireGraceMs,
+      0,
+    ),
+    queueMax: reader.integer("defaults.queueMax", raw.queueMax, DEFAULT_DEFAULTS.queueMax, 1),
+    queueMinExpiryMs: reader.integer(
+      "defaults.queueMinExpiryMs",
+      raw.queueMinExpiryMs,
+      DEFAULT_DEFAULTS.queueMinExpiryMs,
+      1,
+    ),
     maxCatchup: reader.integer("defaults.maxCatchup", raw.maxCatchup, DEFAULT_DEFAULTS.maxCatchup),
     readBytes: reader.integer("defaults.readBytes", raw.readBytes, DEFAULT_DEFAULTS.readBytes, {
       min: READ_BYTES_FLOOR,

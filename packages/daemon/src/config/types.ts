@@ -44,6 +44,10 @@ export interface DefaultsConfig {
   readonly overlap: OverlapPolicy
   readonly misfire: MisfirePolicy
   readonly misfireGraceMs: number
+  readonly skipMisfireGraceMs: number
+  readonly onceMisfireGraceMs: number
+  readonly queueMax: number
+  readonly queueMinExpiryMs: number
   readonly maxCatchup: number
   readonly readBytes: number
 }
@@ -81,6 +85,10 @@ export interface LimitsConfig {
   readonly threadQueueTtlMs: number
   readonly omoCommandTimeoutMs: number
   readonly omoCommandStderrTailChars: number
+  readonly schedulerMaxTickIntervalMs: number
+  readonly schedulerClockJumpMs: number
+  readonly scheduleHorizonMs: number
+  readonly schedulePreviewMaxCount: number
 }
 
 export interface OmoConfig {
@@ -121,6 +129,10 @@ export const DEFAULT_DEFAULTS: DefaultsConfig = {
   overlap: "skip",
   misfire: "fire_once",
   misfireGraceMs: 3_600_000,
+  skipMisfireGraceMs: 60_000,
+  onceMisfireGraceMs: 86_400_000,
+  queueMax: 1,
+  queueMinExpiryMs: 3_600_000,
   maxCatchup: 50,
   readBytes: 4_194_304,
 }
@@ -158,4 +170,8 @@ export const DEFAULT_LIMITS: LimitsConfig = {
   threadQueueTtlMs: 86_400_000,
   omoCommandTimeoutMs: 120_000,
   omoCommandStderrTailChars: 500,
+  schedulerMaxTickIntervalMs: 30_000,
+  schedulerClockJumpMs: 5_000,
+  scheduleHorizonMs: 157_680_000_000,
+  schedulePreviewMaxCount: 1_000,
 }
