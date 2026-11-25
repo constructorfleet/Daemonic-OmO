@@ -1,8 +1,12 @@
+import type { TerminalSnapshot } from "./terminals.js"
+
 export interface TranscriptDocument {
   readonly lines: readonly string[]
   readonly lineTurns: readonly (string | undefined)[]
   readonly turns: readonly TranscriptTurn[]
   readonly todo?: TodoState
+  /** Monitors and background shells recorded in the same session file. */
+  readonly terminals?: TerminalSnapshot
 }
 
 export type TodoStatus = "pending" | "in_progress" | "completed"

@@ -3,7 +3,9 @@ import { closeSync, existsSync, fstatSync, openSync, readFileSync, readdirSync, 
 import { homedir } from "node:os"
 import { basename, join, resolve } from "node:path"
 
+import { decodeDagRun, type DagRunRecord } from "./dag.js"
 import { decodeTaskRecord, type TaskRecord } from "./state.js"
+import { parseTerminals } from "./terminals.js"
 import {
   buildEventDocument,
   buildTranscriptDocument,
@@ -14,6 +16,8 @@ import {
 } from "./transcript.js"
 
 const MAX_RECORD_BYTES = 256 * 1024
+const MAX_RUN_BYTES = 512 * 1024
+const ACTIVITY_TAIL_BYTES = 8 * 1024
 const DEFAULT_MAX_TRANSCRIPT_BYTES = 4 * 1024 * 1024
 
 export interface TranscriptReadOptions {
@@ -29,6 +33,11 @@ export interface StoreOptions {
 export interface TaskStoreSnapshot {
   readonly records: readonly TaskRecord[]
   readonly invalidRecords: number
+}
+
+export interface DagStoreSnapshot {
+  readonly runs: readonly DagRunRecord[]
+  readonly invalidRuns: number
 }
 
 export function resolveTaskStateDir(projectDir: string, options: StoreOptions = {}): string {
@@ -83,6 +92,68 @@ export function loadTaskRecords(stateDir: string): TaskStoreSnapshot {
   return { records, invalidRecords }
 }
 
+export function loadDagRuns(stateDir: string): DagStoreSnapshot {
+  let files: string[]
+  try {
+    files = readdirSync(join(stateDir, "dag", "runs")).filter((file) => file.endsWith(".json")).sort()
+  } catch (error) {
+    if (isMissing(error)) return { runs: [], invalidRuns: 0 }
+    throw error
+  }
+
+  const runs: DagRunRecord[] = []
+  let invalidRuns = 0
+  for (const file of files) {
+    try {
+      const path = join(stateDir, "dag", "runs", file)
+      if (statSync(path).size > MAX_RUN_BYTES) {
+        invalidRuns += 1
+        continue
+      }
+      const value: unknown = JSON.parse(readFileSync(path, "utf8"))
+      const run = decodeDagRun(value)
+      if (run === undefined) invalidRuns += 1
+      else runs.push(run)
+    } catch {
+      invalidRuns += 1
+    }
+  }
+  return { runs, invalidRuns }
+}
+
+/**
+ * The live activity channel is not journaled, so the newest assistant message in the task
+ * event log is the closest on-disk proxy. A bounded tail keeps refresh cheap.
+ */
+export function readTaskActivity(stateDir: string, taskId: string, maxBytes = ACTIVITY_TAIL_BYTES): string | undefined {
+  if (!isSafeId(taskId)) return undefined
+  const text = readTail(join(stateDir, "logs", `${taskId}.jsonl`), maxBytes)
+  if (text === undefined) return undefined
+  let activity: string | undefined
+  for (const line of text.split("\n")) {
+    if (!line.includes("assistant_message")) continue
+    try {
+      const value: unknown = JSON.parse(line)
+      if (typeof value !== "object" || value === null) continue
+      const type = (value as { type?: unknown }).type
+      const payload = (value as { payload?: unknown }).payload
+      if (type !== "assistant_message" || typeof payload !== "object" || payload === null) continue
+      const message = (payload as { text?: unknown }).text
+      if (typeof message !== "string") continue
+      const normalized = normalizeActivity(message)
+      if (normalized !== undefined) activity = normalized
+    } catch {
+      // A tail can start mid-record; ignore the torn line and keep the rest.
+    }
+  }
+  return activity
+}
+
+function normalizeActivity(text: string): string | undefined {
+  const normalized = text.replace(/\s+/gu, " ").trim()
+  return normalized.length === 0 ? undefined : normalized
+}
+
 export function readTaskDocument(
   stateDir: string,
   taskId: string,
@@ -95,8 +166,8 @@ export function readTaskDocument(
   if (sessionText === undefined) return buildEventDocument(parseEventTranscript(eventText))
   const turns = parseSessionTurns(sessionText)
   const document = buildTranscriptDocument(turns)
-  if (document.lines.length === 0) return buildEventDocument(parseEventTranscript(eventText))
-  return buildTranscriptDocument(turns, parseEventErrors(eventText))
+  if (document.lines.length === 0) return withTerminals(buildEventDocument(parseEventTranscript(eventText)), sessionText)
+  return withTerminals(buildTranscriptDocument(turns, parseEventErrors(eventText)), sessionText)
 }
 
 export function readRootDocument(
@@ -112,7 +183,14 @@ export function readRootDocument(
   const texts = chosen
     .map((file) => readTail(file, maxBytes))
     .filter((text): text is string => text !== undefined)
-  return buildTranscriptDocument(parseSessionTurns(texts.join("")))
+  const text = texts.join("")
+  return withTerminals(buildTranscriptDocument(parseSessionTurns(text)), text)
+}
+
+function withTerminals(document: TranscriptDocument, text: string): TranscriptDocument {
+  if (text.length === 0) return document
+  const terminals = parseTerminals(text)
+  return terminals.items.length === 0 && terminals.sessionState === undefined ? document : { ...document, terminals }
 }
 
 /**

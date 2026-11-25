@@ -8,7 +8,10 @@ import {
   visibleNavigationItems,
   type NavigationState,
 } from "./navigation.js"
+import type { DagNodeRecord, DagRoute, DagRunRecord } from "./dag.js"
+import { isTerminalDagState } from "./dag.js"
 import type { TaskRecord, TaskTreeItem } from "./state.js"
+import type { TerminalItem, TerminalKind, TerminalSnapshot } from "./terminals.js"
 import { previewImage, type PreviewCell } from "./image-preview.js"
 import {
   formatTurnBody,
@@ -34,6 +37,7 @@ export interface ViewerState extends NavigationState {
   readonly todoVisible: boolean
   readonly todoHideCompleted: boolean
   readonly todoScroll: number
+  readonly terminalsVisible: boolean
   readonly hiddenFilters: readonly TaskFilter[]
   /** Main-session roots whose subagent tasks are expanded in the tree. */
   readonly expandedRoots: readonly string[]
@@ -61,6 +65,8 @@ export interface ViewerViewport {
   readonly detailHeight: number
   readonly todoWidth: number
   readonly todoHeight: number
+  readonly terminalsWidth?: number
+  readonly terminalsHeight?: number
 }
 
 export type ViewerHit =
@@ -112,6 +118,7 @@ export interface ViewerFrame {
   /** Scroll offset that puts the expanded turn at the top of the detail pane. */
   readonly focusOffset?: number
   readonly todo?: PaneFrame
+  readonly terminals?: PaneFrame
 }
 
 export type ViewerInput =
@@ -127,6 +134,7 @@ export type ViewerInput =
   | { readonly type: "toggle-todo-done" }
   | { readonly type: "toggle-turn" }
   | { readonly type: "toggle-todo" }
+  | { readonly type: "toggle-terminals" }
   | { readonly type: "expand-turn"; readonly id: string }
   | { readonly type: "scroll-transcript"; readonly direction: "older" | "newer"; readonly amount: number }
   | { readonly type: "follow" }
@@ -149,6 +157,7 @@ export function initialViewerState(items: readonly TaskTreeItem[]): ViewerState 
     todoVisible: true,
     todoHideCompleted: false,
     todoScroll: 0,
+    terminalsVisible: true,
     hiddenFilters: [],
     expandedRoots: [],
     paused: false,
@@ -171,10 +180,14 @@ export function updateViewer(state: ViewerState, input: ViewerInput, context: Vi
       if (state.focus === "transcript") return toggleSelectedTurn(state, turns)
       const selected = context.items.find((item) => item.id === state.selectedId)
       if (selected?.kind === "main") return toggleExpandedRoot(state, selected.rootSessionId)
+      // Run headers are organizational rows; Enter leaves the current transcript alone.
+      if (selected?.kind === "run") return state
       return enterTranscript(openSelection(state, context.items))
     }
     case "open-item": {
-      if (!context.items.some((item) => item.id === input.id)) return state
+      const item = context.items.find((entry) => entry.id === input.id)
+      if (item === undefined) return state
+      if (item.kind === "run") return { ...state, selectedId: item.id }
       return enterTranscript(openSelection({ ...state, selectedId: input.id }, context.items))
     }
     case "exit-level":
@@ -210,6 +223,8 @@ export function updateViewer(state: ViewerState, input: ViewerInput, context: Vi
         focus: !todoVisible && state.focus === "todo" ? "tree" : state.focus,
       }
     }
+    case "toggle-terminals":
+      return { ...state, terminalsVisible: !state.terminalsVisible }
     case "toggle-turn": {
       if (state.expandedTurnId !== undefined) return { ...state, expandedTurnId: undefined }
       const newest = turns.at(-1)
@@ -277,8 +292,9 @@ function scrollTodo<S extends ViewerState>(state: S, delta: number, maxScroll: n
 
 function filterGroup(status: string): TaskFilter | undefined {
   if (status === "completed") return "completed"
-  if (status === "running" || status === "pending") return "running"
+  if (status === "running" || status === "pending" || status === "scheduled") return "running"
   if (status === "paused" || status === "interrupted" || status === "cancelled") return "stopped"
+  if (status === "failed" || status === "skipped") return "stopped"
   return undefined
 }
 
@@ -292,8 +308,9 @@ export function visibleTaskItems(state: ViewerState, items: readonly TaskTreeIte
     if (item.kind === "main") return true
     if (!expanded.has(item.rootSessionId)) return false
     if (hidden.size === 0) return true
+    if (item.kind === "run") return true
     if (item.id === state.selectedId || item.id === state.viewId) return true
-    const group = filterGroup(item.task?.status ?? "")
+    const group = filterGroup(item.node?.state ?? item.task?.status ?? "")
     return group === undefined || !hidden.has(group)
   })
 }
@@ -397,16 +414,18 @@ export function projectViewer(
   const tabTarget = todo !== undefined && state.todoVisible ? "todo" : "tree"
   const treeAction = selected?.kind === "main"
     ? `enter/→ ${selectedRootExpanded ? "collapse" : "expand"}   o open`
-    : hasTurns
-      ? "enter/→ turns"
-      : "enter follow"
+    : selected?.kind === "run"
+      ? "run group"
+      : hasTurns
+        ? "enter/→ turns"
+        : "enter follow"
   const footer = expanded
-    ? `TURN ${expandedIndex + 1}/${data.transcript.turns.length}   ↑/↓ turn   enter/← close   j/k scroll   ${todoHint}p pause   r refresh   q quit`
+    ? `TURN ${expandedIndex + 1}/${data.transcript.turns.length}   ↑/↓ turn   enter/← close   j/k scroll   ${todoHint}m monitors   p pause   r refresh   q quit`
     : state.focus === "todo" && todo !== undefined
-      ? `TODO ${todo.done}/${todo.total}   ↑/↓ scroll   ${state.todoHideCompleted ? "4 show done" : "4 hide done"}   ← back   tab next   l hide   p pause   q quit`
+      ? `TODO ${todo.done}/${todo.total}   ↑/↓ scroll   ${state.todoHideCompleted ? "4 show done" : "4 hide done"}   ← back   tab next   l hide   m monitors   p pause   q quit`
       : state.focus === "transcript" && hasTurns
-        ? `↑/↓ turn   enter expand   ← back   tab ${tabTarget}   t newest   1/2/3 filter   ${todoHint}p pause   q quit`
-        : `↑/↓ select   ${treeAction}   1/2/3 filter   tab ${tabTarget}   ${todoHint}esc main   p pause   r refresh   q quit`
+        ? `↑/↓ turn   enter expand   ← back   tab ${tabTarget}   t newest   1/2/3 filter   m monitors   ${todoHint}p pause   q quit`
+        : `↑/↓ select   ${treeAction}   1/2/3 filter   tab ${tabTarget}   m monitors   ${todoHint}esc main   p pause   r refresh   q quit`
   const list = projectList(
     visibleTaskItems(state, data.items),
     state.selectedId,
@@ -421,6 +440,14 @@ export function projectViewer(
   const todoPane = state.todoVisible && todo !== undefined
     ? projectTodoPane(todo, viewport.todoWidth, viewport.todoHeight, state.todoScroll, state.todoHideCompleted)
     : undefined
+  const terminalsPane = state.terminalsVisible
+    ? projectTerminalsPane(
+        data.transcript.terminals,
+        viewport.terminalsWidth ?? viewport.detailWidth,
+        viewport.terminalsHeight ?? 10,
+        now,
+      )
+    : undefined
   return {
     header,
     footer,
@@ -429,6 +456,7 @@ export function projectViewer(
     limits: { transcriptScroll: detail.limits.transcriptScroll, todoScroll: todoPane?.maxScroll ?? 0 },
     ...(detail.focusOffset === undefined ? {} : { focusOffset: detail.focusOffset }),
     ...(todoPane === undefined ? {} : { todo: todoPane.frame }),
+    ...(terminalsPane === undefined ? {} : { terminals: terminalsPane }),
   }
 }
 
@@ -541,7 +569,8 @@ interface StyledLine {
 function statusColor(status: string): string {
   if (status === "running") return STYLE.tool
   if (status === "completed") return STYLE.result
-  if (status === "error" || status === "lost") return STYLE.error
+  if (status === "error" || status === "lost" || status === "failed") return STYLE.error
+  if (status === "blocked") return STYLE.error
   return STYLE.thinking
 }
 
@@ -562,12 +591,35 @@ function describeItem(
       },
     ]
   }
+  const indent = treeIndent(item)
+  const branch = item.lastSibling === false ? "├─" : "└─"
+  if (item.kind === "run") {
+    const run = item.run
+    if (run === undefined) return []
+    return [
+      {
+        text: `${prefix}${indent}${branch}${runGlyph(run.status)} ${excerpt(safeText(run.name), 32)} ${run.status} ${waveLabel(run)} ${countsLabel(run)}`,
+        style: { fg: statusColor(run.status), bold: true, ...selection },
+      },
+    ]
+  }
   const task = item.task
   if (task === undefined) return []
-  const indent = item.ancestorLastSiblings === undefined
-    ? "  ".repeat(Math.max(0, item.depth - 1))
-    : item.ancestorLastSiblings.map((ancestorIsLast) => (ancestorIsLast ? "  " : "│ ")).join("")
-  const branch = item.lastSibling === false ? "├─" : "└─"
+  if (item.node !== undefined) {
+    const node = item.node
+    const parts = [`${dagGlyph(node.state)} ${excerpt(safeText(node.label ?? node.id), 48)}`, routeLabel(node.route)]
+    if ((node.attempt ?? 1) > 1) parts.push(`x${node.attempt}`)
+    const activity = isTerminalDagState(node.state) ? undefined : item.activity
+    if (activity !== undefined) parts.push(excerpt(safeText(activity), 80))
+    const elapsed = nodeElapsed(node, now)
+    if (elapsed !== undefined) parts.push(elapsed)
+    return [
+      {
+        text: `${prefix}${indent}${branch}${parts.join(" · ")}`,
+        style: { fg: statusColor(node.state), ...selection },
+      },
+    ]
+  }
   const continuation = item.lastSibling === false ? "│ " : "  "
   const name = safeText(task.name ?? task.task_summary ?? task.description ?? task.task_id)
   return [
@@ -580,6 +632,92 @@ function describeItem(
       style: { fg: STYLE.meta, dim: true, ...selection },
     },
   ]
+}
+
+function treeIndent(item: TaskTreeItem): string {
+  return item.ancestorLastSiblings === undefined
+    ? "  ".repeat(Math.max(0, item.depth - 1))
+    : item.ancestorLastSiblings.map((ancestorIsLast) => (ancestorIsLast ? "  " : "│ ")).join("")
+}
+
+const DAG_GLYPHS: Readonly<Record<string, string>> = {
+  running: "▶",
+  pending: "◌",
+  scheduled: "◔",
+  blocked: "⊟",
+  completed: "✓",
+  failed: "✗",
+  skipped: "⊘",
+  cancelled: "⊘",
+  paused: "⏸",
+}
+
+function dagGlyph(state: string): string {
+  return DAG_GLYPHS[state] ?? "○"
+}
+
+function runGlyph(status: string): string {
+  return status === "paused" ? "·" : dagGlyph(status)
+}
+
+function routeLabel(route: DagRoute): string {
+  return route.kind === "agent"
+    ? `agent:${route.agent}${route.model === undefined ? "" : `(${route.model})`}`
+    : `category:${route.category}`
+}
+
+function waveLabel(run: DagRunRecord): string {
+  const total = run.waves.length
+  if (total === 0) return "wave 0/0"
+  const states = new Map(run.nodes.map((node) => [node.id, node.state] as const))
+  const openIndex = run.waves.findIndex((wave) =>
+    wave.nodeIds.some((nodeId) => !isTerminalDagState(states.get(nodeId) ?? "pending")),
+  )
+  return `wave ${openIndex === -1 ? total : openIndex + 1}/${total}`
+}
+
+function countsLabel(run: DagRunRecord): string {
+  let completed = 0
+  let running = 0
+  let failed = 0
+  for (const node of run.nodes) {
+    if (node.state === "completed") completed += 1
+    else if (node.state === "running") running += 1
+    else if (node.state === "failed") failed += 1
+  }
+  const tokens = [`${completed}/${run.nodes.length} done`]
+  if (running > 0) tokens.push(`${running} running`)
+  if (failed > 0) tokens.push(`${failed} failed`)
+  return tokens.join(", ")
+}
+
+function nodeElapsed(node: DagNodeRecord, now: number): string | undefined {
+  const started = node.startedAt === undefined ? Number.NaN : Date.parse(node.startedAt)
+  if (Number.isFinite(started)) {
+    const completed = node.completedAt === undefined ? Number.NaN : Date.parse(node.completedAt)
+    const end = isTerminalDagState(node.state) && Number.isFinite(completed) ? completed : now
+    return formatHumanDuration(Math.max(0, end - started))
+  }
+  if (isTerminalDagState(node.state)) return undefined
+  const created = node.createdAt === undefined ? Number.NaN : Date.parse(node.createdAt)
+  if (!Number.isFinite(created)) return undefined
+  return `waiting ${formatHumanDuration(Math.max(0, now - created))}`
+}
+
+function formatHumanDuration(milliseconds: number): string {
+  const totalSeconds = Math.max(0, Math.floor(milliseconds / 1000))
+  const hours = Math.floor(totalSeconds / 3600)
+  const minutes = Math.floor((totalSeconds % 3600) / 60)
+  const seconds = totalSeconds % 60
+  if (hours > 0) return `${hours}h ${minutes}m ${seconds}s`
+  if (minutes > 0) return `${minutes}m ${seconds}s`
+  return `${seconds}s`
+}
+
+function excerpt(text: string, width: number): string {
+  const normalized = text.replace(/\s+/gu, " ").trim()
+  if (width <= 0) return ""
+  return normalized.length <= width ? normalized : `${normalized.slice(0, Math.max(0, width - 3)).trimEnd()}...`
 }
 
 function projectDetail(
@@ -618,7 +756,11 @@ function projectDetail(
   const cursorTurnId = knownTurn(state.selectedTurnId) ? state.selectedTurnId : expandedTurnId
   const heading = viewed.kind === "main"
     ? mainHeading(viewed, data)
-    : taskHeading(viewed, data, selected, now)
+    : viewed.kind === "run" && viewed.run !== undefined
+      ? runHeading(viewed.run, data)
+      : viewed.node !== undefined
+        ? nodeHeading(viewed, data, now)
+        : taskHeading(viewed, data, selected, now)
   const headingRows = heading.flatMap((line) =>
     wrapText(line, width).map((text) => ({ text, style: headingStyle(line, viewed) })),
   )
@@ -666,9 +808,10 @@ function projectDetail(
 }
 
 function headingStyle(line: string, viewed: TaskTreeItem): RowStyle {
-  if (line === "MAIN SESSION" || line.startsWith("AGENT  ")) return { fg: STYLE.accent, bold: true }
+  if (line === "MAIN SESSION" || line === "RUN" || line === "NODE" || line.startsWith("AGENT  ")) return { fg: STYLE.accent, bold: true }
   if (line.startsWith("TRANSCRIPT")) return { fg: STYLE.meta }
   if (line.startsWith("Status")) return { fg: statusColor(viewed.task?.status ?? ""), bold: true }
+  if (line.startsWith("State")) return { fg: statusColor(viewed.node?.state ?? ""), bold: true }
   if (line.startsWith("Choose an agent") || line.startsWith("Press t") || line.startsWith("Escape")) return { fg: STYLE.thinking }
   if (line.startsWith("Agent record disappeared")) return { fg: STYLE.error }
   return { fg: STYLE.text }
@@ -753,6 +896,102 @@ function todoItemRows(item: TodoItem, width: number): readonly StyledLine[] {
   }))
 }
 
+const TERMINAL_GLYPH: Record<TerminalKind, string> = { monitor: "◉", shell: "▣" }
+
+function projectTerminalsPane(
+  terminals: TerminalSnapshot | undefined,
+  width: number,
+  maxRows: number,
+  now: number,
+): PaneFrame {
+  const limit = Math.max(1, Math.floor(maxRows))
+  const items = terminals?.items ?? []
+  const sessionState = terminals?.sessionState
+  const stale = sessionState === "done" || sessionState === "paused"
+  const open = items.filter((item) => item.state === "open").length
+  const passive = items.filter((item) => item.state === "passive").length
+  const counts = items.length === 0
+    ? "none"
+    : `${items.length}${open === 0 ? "" : ` · ${open} open`}${passive === 0 ? "" : ` · ${passive} passive`}`
+  const stateLabel = sessionState === undefined ? "" : `   session ${sessionState}${stale ? " — may be stale" : ""}`
+  const rows: StyledLine[] = wrapText(`MONITORS / SHELLS   ${counts}${stateLabel}`, width).map((text) => ({
+    text,
+    style: { fg: STYLE.accent, bold: true },
+  }))
+  if (items.length === 0) {
+    rows.push(...wrapText("No monitors or background shells recorded for this session.", width).map((text) => ({
+      text,
+      style: { fg: STYLE.thinking },
+    })))
+  } else {
+    let shown = 0
+    for (let index = 0; index < items.length; index += 1) {
+      const block = terminalBlock(items[index]!, width, now, stale)
+      const reserve = index < items.length - 1 ? 1 : 0
+      const room = limit - rows.length - reserve
+      if (block.length <= room) {
+        rows.push(...block)
+        shown = index + 1
+        continue
+      }
+      if (shown === 0 && room > 0) {
+        rows.push(...block.slice(0, room))
+        shown = 1
+      }
+      break
+    }
+    if (shown < items.length) {
+      rows.push({
+        text: `+${items.length - shown} more   (m hides this pane)`,
+        style: { fg: STYLE.meta, dim: true },
+      })
+    }
+  }
+  const visible = rows.slice(0, limit)
+  return {
+    lines: visible.map((row) => row.text),
+    hits: visible.map(() => undefined),
+    styles: visible.map((row) => row.style),
+  }
+}
+
+function terminalBlock(item: TerminalItem, width: number, now: number, stale: boolean): readonly StyledLine[] {
+  const dim = stale ? { dim: true } : {}
+  const facts = [
+    item.state ?? "—",
+    watchAge(item.startedAtMs, now),
+    ...(item.persistent === true ? ["persistent"] : []),
+    ...(item.timeoutMs === undefined ? [] : [`limit ${formatWatchDuration(item.timeoutMs)}`]),
+  ]
+  const head = `${item.state === "open" ? "●" : "○"} ${TERMINAL_GLYPH[item.kind]} ${item.kind}  ${item.id}  ${facts.join("  ")}`
+  const rows: StyledLine[] = wrapText(head, width).map((text) => ({
+    text,
+    style: { fg: item.kind === "monitor" ? STYLE.accent : STYLE.tool, ...dim },
+  }))
+  const detail = (item.kind === "shell" ? item.command ?? item.description : item.description).trim()
+  if (detail.length === 0) return rows
+  const inner = Math.max(1, width - 2)
+  const withFilter = item.filter === undefined ? detail : `${detail}   filter ${item.filter}`
+  const wrapped = [...wrapText(withFilter, inner)]
+  const shown = wrapped.slice(0, 2)
+  if (wrapped.length > shown.length) shown[shown.length - 1] = `${shown[shown.length - 1]}…`
+  for (const text of shown) rows.push({ text: `  ${text}`, style: { fg: STYLE.thinking, ...dim } })
+  return rows
+}
+
+function watchAge(startedAtMs: number | undefined, now: number): string {
+  if (startedAtMs === undefined || !Number.isFinite(startedAtMs)) return "—"
+  return formatWatchDuration(now - startedAtMs)
+}
+
+function formatWatchDuration(millis: number): string {
+  const seconds = Math.max(0, Math.floor(millis / 1000))
+  if (seconds < 60) return `${seconds}s`
+  if (seconds < 3600) return `${Math.floor(seconds / 60)}m`
+  if (seconds < 86_400) return `${Math.floor(seconds / 3600)}h${String(Math.floor((seconds % 3600) / 60)).padStart(2, "0")}m`
+  return `${Math.floor(seconds / 86_400)}d${String(Math.floor((seconds % 86_400) / 3600)).padStart(2, "0")}h`
+}
+
 function mainHeading(viewed: TaskTreeItem, data: ViewerData): readonly string[] {
   const tasks = data.items.filter((item) => item.kind === "task" && item.rootSessionId === viewed.rootSessionId)
   const counts = countStatuses(tasks)
@@ -800,6 +1039,42 @@ function taskHeading(
     `TRANSCRIPT ${data.transcript.lines.length} lines  •  ${viewed.rootSessionId === selectedRoot ? "current session" : "other session"}`,
     "",
   ].filter((line): line is string => line !== undefined)
+}
+
+function runHeading(run: DagRunRecord, data: ViewerData): readonly string[] {
+  return [
+    `RUN  ${safeText(run.name)}`,
+    "",
+    `Status    ${run.status}`,
+    `Progress  ${waveLabel(run)}  •  ${countsLabel(run)}`,
+    `Nodes     ${run.nodes.length}`,
+    `Created   ${run.createdAt ?? "—"}`,
+    `Session   ${run.rootSessionId}`,
+    "",
+    `TRANSCRIPT ${data.transcript.lines.length} lines`,
+    "",
+  ]
+}
+
+function nodeHeading(viewed: TaskTreeItem, data: ViewerData, now: number): readonly string[] {
+  const node = viewed.node
+  if (node === undefined) return ["Agent record disappeared. Refreshing the tree…"]
+  const task = viewed.task
+  const attempt = (node.attempt ?? 1) > 1 ? `x${node.attempt}` : undefined
+  return [
+    `NODE  ${safeText(node.label ?? node.id)}`,
+    "",
+    `State     ${node.state}`,
+    `Route     ${routeLabel(node.route)}`,
+    ...(attempt === undefined ? [] : [`Attempt   ${attempt}`]),
+    `Started   ${node.startedAt ?? node.createdAt ?? "—"}`,
+    `Elapsed   ${nodeElapsed(node, now) ?? "—"}`,
+    ...(viewed.activity === undefined ? [] : [`Activity  ${safeText(viewed.activity)}`]),
+    ...(task === undefined ? [] : [`Task ID   ${task.task_id}`]),
+    "",
+    `TRANSCRIPT ${data.transcript.lines.length} lines`,
+    "",
+  ]
 }
 
 interface WrappedRow {
