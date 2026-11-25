@@ -31,7 +31,7 @@ function project(target: E2eServer, userId: UserId, name: string): Project {
     cwd: `/work/${name}`,
     agentDir: "/agents/x",
     stateDir: `/state/${name}`,
-    maxRunning: 1,
+    settings: { fullAccessOptIn: false, maxRunning: 1, worktreeForAdhoc: false },
     state: "active",
     revision: 1,
     createdAt: at,

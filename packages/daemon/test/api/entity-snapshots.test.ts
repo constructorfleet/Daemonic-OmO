@@ -19,7 +19,7 @@ describe("entity stream snapshots", () => {
       cwd: "/work/before",
       agentDir: alice.user.agentDir,
       stateDir: "/state/before",
-      maxRunning: 1,
+      settings: { fullAccessOptIn: false, maxRunning: 1, worktreeForAdhoc: false },
       state: "active",
       revision: 1,
       createdAt: at,

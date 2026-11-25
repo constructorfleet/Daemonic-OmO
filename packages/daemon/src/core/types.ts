@@ -91,14 +91,22 @@ export interface User {
 export const PROJECT_STATES = ["active", "archived"] as const
 export type ProjectState = (typeof PROJECT_STATES)[number]
 
+export interface ProjectSettings {
+  readonly fullAccessOptIn: boolean
+  readonly maxRunning: number
+  readonly defaultModel?: string
+  readonly defaultReasoning?: ThinkingLevel
+  readonly worktreeForAdhoc: boolean
+}
+
 export interface Project {
   readonly id: ProjectId
   readonly userId: UserId
   readonly name: string
-    readonly cwd: string
+  readonly cwd: string
   readonly agentDir: string
   readonly stateDir: string
-  readonly maxRunning: number
+  readonly settings: ProjectSettings
   readonly state: ProjectState
   readonly revision: number
   readonly createdAt: Iso

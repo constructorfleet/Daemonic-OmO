@@ -2,6 +2,7 @@ import type { Database } from "bun:sqlite"
 import type { UserScope } from "../auth"
 import type { DaemonEvent, JsonObject } from "../core/types"
 import type { EventLedger } from "../db/ledger"
+import { normalizeProjectEventData } from "../projects/settings"
 
 export interface ListPage<T> {
   readonly items: readonly T[]
@@ -79,7 +80,7 @@ export function createEventFeed(db: Database, ledger: EventLedger) {
           ...(typeof revision === "number" ? { revision } : {}),
         },
         projectId: event.projectId,
-        data: event.data,
+        data: event.entityKind === "project" ? normalizeProjectEventData(event.data) : event.data,
       }
     },
   }

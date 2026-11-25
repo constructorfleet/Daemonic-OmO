@@ -38,7 +38,7 @@ function mountProjectRoutes(target: E2eServer): ProjectRoutes {
         cwd: `/work/${name}`,
         agentDir: principal.user.agentDir,
         stateDir: `/state/${name}`,
-        maxRunning: 1,
+        settings: { fullAccessOptIn: false, maxRunning: 1, worktreeForAdhoc: false },
         state: "active",
         revision: 1,
         createdAt: at,

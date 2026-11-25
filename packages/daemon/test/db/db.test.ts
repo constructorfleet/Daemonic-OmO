@@ -168,7 +168,7 @@ describe("daemon database", () => {
       cwd: "/tmp/project",
       agentDir: "/tmp/agent",
       stateDir: "/tmp/state",
-      maxRunning: 1,
+      settings: { fullAccessOptIn: false, maxRunning: 1, worktreeForAdhoc: false },
       state: "active",
       revision: 1,
       createdAt: "2026-01-01T00:00:00.000Z",
@@ -180,6 +180,46 @@ describe("daemon database", () => {
     expect(() => repositories.projects.update({ ...original, name: "stale", revision: 2 }, 1))
       .toThrow("revision_conflict")
     expect(repositories.projects.get(original.id)?.name).toBe("updated")
+  })
+
+  test("decodes a legacy project row with top-level maxRunning into canonical settings", () => {
+    const db = testDb()
+    migrate(db)
+    const repositories = createRepositories(db)
+    const owner = id("01ARZ3NDEKTSV4RRFFQ69G5FAV")
+    repositories.users.put(user(owner))
+    const projectId = id("01ARZ3NDEKTSV4RRFFQ69G5FAZ")
+    const at = "2026-01-01T00:00:00.000Z"
+    db.query(
+      `INSERT INTO projects(id, user_id, name, cwd, state, updated_at, json, revision)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+    ).run(
+      projectId,
+      owner,
+      "legacy",
+      "/work/legacy",
+      "active",
+      at,
+      JSON.stringify({
+        id: projectId,
+        userId: owner,
+        name: "legacy",
+        cwd: "/work/legacy",
+        agentDir: "/agents/member",
+        stateDir: "/state/legacy",
+        maxRunning: 3,
+        state: "active",
+        revision: 1,
+        createdAt: at,
+        updatedAt: at,
+      }),
+      1,
+    )
+
+    const project = repositories.projects.get(projectId)
+
+    expect(project?.settings).toEqual({ fullAccessOptIn: false, maxRunning: 3, worktreeForAdhoc: false })
+    expect(project === null ? null : "maxRunning" in project).toBe(false)
   })
 
   test("prunes only events outside both the retention window and minimum row count", () => {

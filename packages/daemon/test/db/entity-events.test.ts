@@ -45,7 +45,7 @@ function entities(userId: UserId) {
     cwd: "/work/project",
     agentDir: "/agents/member",
     stateDir: "/state/project",
-    maxRunning: 2,
+    settings: { fullAccessOptIn: false, maxRunning: 2, worktreeForAdhoc: false },
     state: "active",
     revision: 1,
     createdAt: user.createdAt,
