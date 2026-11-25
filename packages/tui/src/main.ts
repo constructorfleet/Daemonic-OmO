@@ -4,7 +4,7 @@ import { resolve } from "node:path"
 import { fileURLToPath } from "node:url"
 
 import { runViewer } from "./viewer.js"
-import { resolveAgentDir, resolveTaskStateDir } from "./task-store.js"
+import { resolveAgentDir, resolveTaskStateDir } from "@omo-daemonic/store"
 import { buildTmuxPlan, runTmuxPlan } from "./wrapper.js"
 
 const HELP = `OmO Agent Viewer

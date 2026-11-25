@@ -1,8 +1,12 @@
+import type { TerminalSnapshot } from "./terminals.js"
+
 export interface TranscriptDocument {
   readonly lines: readonly string[]
   readonly lineTurns: readonly (string | undefined)[]
   readonly turns: readonly TranscriptTurn[]
   readonly todo?: TodoState
+  /** Monitors and background shells recorded in the same session file. */
+  readonly terminals?: TerminalSnapshot
 }
 
 export type TodoStatus = "pending" | "in_progress" | "completed"
@@ -177,7 +181,7 @@ function firstMatch(lines: readonly string[], pattern: RegExp): RegExpExecArray 
   return undefined
 }
 
-function lastTodoReport(turns: readonly TranscriptTurn[]): TodoState | undefined {
+export function lastTodoReport(turns: readonly TranscriptTurn[]): TodoState | undefined {
   for (let turnIndex = turns.length - 1; turnIndex >= 0; turnIndex -= 1) {
     const results = turns[turnIndex]?.results ?? []
     for (let index = results.length - 1; index >= 0; index -= 1) {

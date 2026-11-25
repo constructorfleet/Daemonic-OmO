@@ -7,6 +7,7 @@
     "omo-daemonic": "./src/cli/main.ts"
   },
   "dependencies": {
+    "@omo-daemonic/store": "workspace:*",
     "croner": "^11.0.1",
     "jsonc-parser": "^3.3.1",
     "oauth4webapi": "^3.8.9"

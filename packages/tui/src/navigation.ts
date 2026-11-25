@@ -1,4 +1,4 @@
-import type { TaskTreeItem } from "./state.js"
+import type { TaskTreeItem } from "@omo-daemonic/store"
 
 export type NavigationItem = Pick<TaskTreeItem, "id" | "kind" | "rootSessionId">
 
@@ -28,6 +28,8 @@ export function moveSelection<S extends NavigationState>(
 export function openSelection<S extends NavigationState>(state: S, items: readonly NavigationItem[]): S {
   const selected = items.find((item) => item.id === state.selectedId)
   if (selected === undefined) return state
+  // Run rows summarize a graph; they have no transcript to open.
+  if (selected.kind === "run") return state
   return { ...state, viewId: selected.id, scrollOffset: 0 }
 }
 

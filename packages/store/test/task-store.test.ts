@@ -9,7 +9,7 @@ import {
   readTaskDocument,
   resolveAgentDir,
   resolveTaskStateDir,
-} from "../src/task-store"
+} from "../src/index"
 
 const roots: string[] = []
 const temp = (): string => {
