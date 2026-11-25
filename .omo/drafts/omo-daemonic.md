@@ -4,7 +4,7 @@ status: review_unavailable_after_ulw-execute
 intent: clear
 review_required: true
 plan_path: .omo/plans/omo-daemonic.md
-plan_sha256: a7c475bded666eb9827e8094363a28da4350ae9a45fac2301933f6119a12b242
+plan_sha256: 98454349c07de5c5ffedae9e43df2743241b4f569df59222d5e5f4078bdd55e4
 review_round_id: r6-20261125-t6proof
 review_round_limit: 6
 pending-action: final F1/gate reviewer must audit execution amendment
