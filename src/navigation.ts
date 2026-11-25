@@ -14,32 +14,39 @@ export function initialNavigation(items: readonly NavigationItem[] = []): Naviga
   return { ...(main === undefined ? {} : { selectedId: main.id, viewId: main.id }), scrollOffset: 0 }
 }
 
-export function moveSelection(state: NavigationState, delta: number, items: readonly NavigationItem[]): NavigationState {
-  if (items.length === 0) return { scrollOffset: 0 }
+export function moveSelection<S extends NavigationState>(
+  state: S,
+  delta: number,
+  items: readonly NavigationItem[],
+): S {
+  if (items.length === 0) return { ...state, scrollOffset: 0 }
   const current = Math.max(0, items.findIndex((item) => item.id === state.selectedId))
   const index = (current + delta + items.length) % items.length
   return { ...state, selectedId: items[index]?.id, scrollOffset: 0 }
 }
 
-export function openSelection(state: NavigationState, items: readonly NavigationItem[]): NavigationState {
+export function openSelection<S extends NavigationState>(state: S, items: readonly NavigationItem[]): S {
   const selected = items.find((item) => item.id === state.selectedId)
   if (selected === undefined) return state
   return { ...state, viewId: selected.id, scrollOffset: 0 }
 }
 
-export function returnToMain(state: NavigationState, items: readonly NavigationItem[]): NavigationState {
+export function returnToMain<S extends NavigationState>(state: S, items: readonly NavigationItem[]): S {
   const current = items.find((item) => item.id === state.viewId)
   const root = items.find((item) => item.kind === "main" && item.rootSessionId === current?.rootSessionId)
   const main = root ?? items.find((item) => item.kind === "main")
   return { ...state, selectedId: main?.id, viewId: main?.id, scrollOffset: 0 }
 }
 
-export function adjustScroll(state: NavigationState, delta: number): NavigationState {
-  return { ...state, scrollOffset: Math.max(0, state.scrollOffset + delta) }
-}
-
-export function followTranscript(state: NavigationState): NavigationState {
-  return { ...state, scrollOffset: 0 }
+export function moveTurn<T extends { readonly id: string }>(
+  turns: readonly T[],
+  selectedId: string | undefined,
+  delta: number,
+): T | undefined {
+  if (turns.length === 0) return undefined
+  const current = turns.findIndex((turn) => turn.id === selectedId)
+  if (current < 0) return turns[turns.length - 1]
+  return turns[Math.min(turns.length - 1, Math.max(0, current + delta))]
 }
 
 /** Returns a contiguous list window measured in rendered lines (tasks use two lines). */
@@ -47,21 +54,22 @@ export function visibleNavigationItems<T extends NavigationItem>(
   items: readonly T[],
   selectedId: string | undefined,
   maxRows: number,
+  itemCost: (item: T) => number = rowCost,
 ): readonly T[] {
   if (maxRows <= 0 || items.length === 0) return []
   const selectedIndex = items.findIndex((item) => item.id === selectedId)
   let start = selectedIndex < 0 ? 0 : selectedIndex
   let end = selectedIndex < 0 ? 0 : selectedIndex + 1
-  let rows = selectedIndex < 0 ? 0 : rowCost(items[selectedIndex]!)
+  let rows = selectedIndex < 0 ? 0 : itemCost(items[selectedIndex]!)
   let before = 0
   let after = 0
 
   while (start > 0 || end < items.length) {
-    const previousCost = start > 0 ? rowCost(items[start - 1]!) : Number.POSITIVE_INFINITY
-    const nextCost = end < items.length ? rowCost(items[end]!) : Number.POSITIVE_INFINITY
+    const previousCost = start > 0 ? itemCost(items[start - 1]!) : Number.POSITIVE_INFINITY
+    const nextCost = end < items.length ? itemCost(items[end]!) : Number.POSITIVE_INFINITY
     const choosePrevious = previousCost < nextCost || (previousCost === nextCost && before <= after)
-    const cost = choosePrevious ? previousCost : nextCost
-    if (rows + cost > maxRows) {
+    const stepCost = choosePrevious ? previousCost : nextCost
+    if (rows + stepCost > maxRows) {
       const otherCost = choosePrevious ? nextCost : previousCost
       if (rows + otherCost > maxRows) break
       if (choosePrevious) {
@@ -82,7 +90,7 @@ export function visibleNavigationItems<T extends NavigationItem>(
       end += 1
       after += 1
     }
-    rows += cost
+    rows += stepCost
   }
   return items.slice(start, end)
 }
@@ -91,8 +99,8 @@ function rowCost(item: NavigationItem): number {
   return item.kind === "main" ? 1 : 2
 }
 
-export function reconcileNavigation(state: NavigationState, items: readonly NavigationItem[]): NavigationState {
-  if (items.length === 0) return { scrollOffset: 0 }
+export function reconcileNavigation<S extends NavigationState>(state: S, items: readonly NavigationItem[]): S {
+  if (items.length === 0) return { ...state, selectedId: undefined, viewId: undefined, scrollOffset: 0 }
   const selectedExists = items.some((item) => item.id === state.selectedId)
   const viewExists = items.some((item) => item.id === state.viewId)
   const fallback = initialNavigation(items)

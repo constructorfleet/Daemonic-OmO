@@ -4,9 +4,21 @@ import { homedir } from "node:os"
 import { basename, join, resolve } from "node:path"
 
 import { decodeTaskRecord, type TaskRecord } from "./state.js"
-import { parseEventTranscript, parseSessionTranscript } from "./transcript.js"
+import {
+  buildEventDocument,
+  buildTranscriptDocument,
+  parseEventErrors,
+  parseEventTranscript,
+  parseSessionTurns,
+  type TranscriptDocument,
+} from "./transcript.js"
 
-const MAX_TRANSCRIPT_BYTES = 512 * 1024
+const MAX_RECORD_BYTES = 256 * 1024
+const DEFAULT_MAX_TRANSCRIPT_BYTES = 4 * 1024 * 1024
+
+export interface TranscriptReadOptions {
+  readonly maxBytes?: number
+}
 
 export interface StoreOptions {
   readonly stateDir?: string
@@ -43,10 +55,9 @@ export function resolveAgentDir(options: Pick<StoreOptions, "agentDir" | "env"> 
 }
 
 export function loadTaskRecords(stateDir: string): TaskStoreSnapshot {
-  const tasksDir = join(stateDir, "tasks")
   let files: string[]
   try {
-    files = readdirSync(tasksDir).filter((file) => file.endsWith(".json")).sort()
+    files = readdirSync(join(stateDir, "tasks")).filter((file) => file.endsWith(".json")).sort()
   } catch (error) {
     if (isMissing(error)) return { records: [], invalidRecords: 0 }
     throw error
@@ -56,8 +67,8 @@ export function loadTaskRecords(stateDir: string): TaskStoreSnapshot {
   let invalidRecords = 0
   for (const file of files) {
     try {
-      const path = join(tasksDir, file)
-      if (statSync(path).size > MAX_TRANSCRIPT_BYTES) {
+      const path = join(stateDir, "tasks", file)
+      if (statSync(path).size > MAX_RECORD_BYTES) {
         invalidRecords += 1
         continue
       }
@@ -72,27 +83,47 @@ export function loadTaskRecords(stateDir: string): TaskStoreSnapshot {
   return { records, invalidRecords }
 }
 
-export function readTaskTranscript(stateDir: string, taskId: string): readonly string[] {
-  if (!/^[A-Za-z0-9_-]+$/.test(taskId)) return []
-  const eventPath = join(stateDir, "logs", `${taskId}.jsonl`)
-  const eventLog = parseEventTranscript(readTail(eventPath, MAX_TRANSCRIPT_BYTES) ?? "")
-  if (eventLog.length > 0) return eventLog
+export function readTaskDocument(
+  stateDir: string,
+  taskId: string,
+  options: TranscriptReadOptions = {},
+): TranscriptDocument {
+  if (!isSafeId(taskId)) return buildEventDocument([])
+  const maxBytes = options.maxBytes ?? DEFAULT_MAX_TRANSCRIPT_BYTES
+  const eventText = readTail(join(stateDir, "logs", `${taskId}.jsonl`), maxBytes) ?? ""
+  const sessionText = readChildSessionText(stateDir, taskId, maxBytes)
+  if (sessionText === undefined) return buildEventDocument(parseEventTranscript(eventText))
+  const turns = parseSessionTurns(sessionText)
+  const document = buildTranscriptDocument(turns)
+  if (document.lines.length === 0) return buildEventDocument(parseEventTranscript(eventText))
+  return buildTranscriptDocument(turns, parseEventErrors(eventText))
+}
 
+export function readRootDocument(
+  agentDir: string,
+  sessionId: string,
+  options: TranscriptReadOptions = {},
+): TranscriptDocument {
+  if (!isSafeId(sessionId)) return buildEventDocument([])
+  const maxBytes = options.maxBytes ?? DEFAULT_MAX_TRANSCRIPT_BYTES
+  const text = readTail(join(agentDir, "sessions", `${sessionId}.jsonl`), maxBytes) ?? ""
+  return buildTranscriptDocument(parseSessionTurns(text))
+}
+
+function readChildSessionText(stateDir: string, taskId: string, maxBytes: number): string | undefined {
   const sessionDir = join(stateDir, "children", taskId, "sessions", taskId)
   let files: string[]
   try {
     files = readdirSync(sessionDir).filter((file) => file.endsWith(".jsonl")).sort()
   } catch (error) {
-    if (isMissing(error)) return []
+    if (isMissing(error)) return undefined
     throw error
   }
   const chosen = files.length > 2 ? [files[0], files.at(-1)] : files
-  return chosen.flatMap((file) => parseSessionTranscript(readTail(join(sessionDir, file!), MAX_TRANSCRIPT_BYTES) ?? ""))
-}
-
-export function readRootSessionTranscript(agentDir: string, sessionId: string): readonly string[] {
-  if (!/^[A-Za-z0-9_-]+$/.test(sessionId)) return []
-  return parseSessionTranscript(readTail(join(agentDir, "sessions", `${sessionId}.jsonl`), MAX_TRANSCRIPT_BYTES) ?? "")
+  const texts = chosen
+    .map((file) => readTail(join(sessionDir, file!), maxBytes))
+    .filter((text): text is string => text !== undefined)
+  return texts.length === 0 ? undefined : texts.join("")
 }
 
 function readTail(path: string, maxBytes: number): string | undefined {
@@ -121,6 +152,10 @@ function readTail(path: string, maxBytes: number): string | undefined {
   } finally {
     closeSync(fd)
   }
+}
+
+function isSafeId(value: string): boolean {
+  return /^[A-Za-z0-9_-]+$/.test(value)
 }
 
 function legacyStoreHasRecords(path: string): boolean {

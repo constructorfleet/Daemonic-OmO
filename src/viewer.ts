@@ -1,26 +1,50 @@
-import { BoxRenderable, TextRenderable, createCliRenderer } from "@opentui/core"
+import { BoxRenderable, RGBA, StyledText, TextRenderable, bold, createCliRenderer, dim } from "@opentui/core"
 
+import { projectTaskTree, type TaskTreeItem } from "./state.js"
+import { loadTaskRecords, readRootDocument, readTaskDocument } from "./task-store.js"
+import type { TranscriptDocument } from "./transcript.js"
+import type { PreviewCell } from "./image-preview.js"
 import {
-  adjustScroll,
-  followTranscript,
-  initialNavigation,
-  moveSelection,
-  openSelection,
-  reconcileNavigation,
-  returnToMain,
-  visibleNavigationItems,
-  type NavigationState,
-} from "./navigation.js"
-import { projectTaskTree, type TaskRecord, type TaskTreeItem } from "./state.js"
-import { loadTaskRecords, readRootSessionTranscript, readTaskTranscript } from "./storage.js"
-import { safeText, visibleTranscript } from "./transcript.js"
+  EMPTY_TRANSCRIPT,
+  RAIL_COLOR,
+  clampViewer,
+  initialViewerState,
+  projectViewer,
+  reconcileViewer,
+  updateViewer,
+  viewedItem,
+  type PaneFrame,
+  type RowStyle,
+  type ViewerContext,
+  type ViewerData,
+  type ViewerFrame,
+  type ViewerInput,
+  type ViewerLimits,
+  type ViewerState,
+  type ViewerViewport,
+} from "./viewer-model.js"
 
 export interface ViewerOptions {
   readonly projectDir: string
   readonly agentDir: string
   readonly stateDir: string
   readonly refreshMs: number
+  readonly readBytes: number
 }
+
+interface StoreLoad {
+  readonly items: readonly TaskTreeItem[]
+  readonly invalidRecords: number
+  readonly error?: string
+}
+
+interface TargetLoad {
+  readonly transcript: TranscriptDocument
+  readonly key?: string
+  readonly error?: string
+}
+
+const ZERO_LIMITS: ViewerLimits = { transcriptScroll: 0, todoScroll: 0 }
 
 export async function runViewer(options: ViewerOptions): Promise<void> {
   const renderer = await createCliRenderer({ exitOnCtrlC: false })
@@ -35,9 +59,15 @@ export async function runViewer(options: ViewerOptions): Promise<void> {
   })
   const header = new TextRenderable(renderer, { content: "OMO AGENTS  •  loading task store", fg: "#8be9fd" })
   const content = new BoxRenderable(renderer, { width: "100%", flexGrow: 1, flexDirection: "row", gap: 1 })
-  const listPanel = new BoxRenderable(renderer, {
+  const leftColumn = new BoxRenderable(renderer, {
     width: "35%",
     height: "100%",
+    flexDirection: "column",
+    gap: 1,
+  })
+  const listPanel = new BoxRenderable(renderer, {
+    width: "100%",
+    flexGrow: 1,
     flexDirection: "column",
     padding: 1,
     border: true,
@@ -53,67 +83,201 @@ export async function runViewer(options: ViewerOptions): Promise<void> {
     borderStyle: "rounded",
     borderColor: "#34405e",
   })
-  const listText = new TextRenderable(renderer, { content: "", fg: "#d8dee9" })
-  const detailText = new TextRenderable(renderer, { content: "", fg: "#cbd5e1" })
+  const listText = new TextRenderable(renderer, {
+    content: "",
+    fg: "#d8dee9",
+    selectable: false,
+    wrapMode: "none",
+    width: "100%",
+    height: "100%",
+  })
+  const detailText = new TextRenderable(renderer, {
+    content: "",
+    fg: "#cbd5e1",
+    selectable: false,
+    wrapMode: "none",
+    width: "100%",
+    height: "100%",
+  })
   const footer = new TextRenderable(renderer, {
-    content: "↑/↓ select  enter follow  esc main  j/k scroll  g latest  p pause  r refresh  q quit",
+    content: "↑/↓ select  enter/→ turns  esc main  t newest turn  l todo  j/k scroll  g latest  p pause  r refresh  q quit",
     fg: "#7c8aa5",
   })
+  const todoPanel = new BoxRenderable(renderer, {
+    width: "100%",
+    height: 0,
+    flexDirection: "column",
+    padding: 1,
+    border: true,
+    borderStyle: "rounded",
+    borderColor: "#34405e",
+    visible: false,
+  })
+  const todoText = new TextRenderable(renderer, {
+    content: "",
+    fg: "#cbd5e1",
+    selectable: false,
+    wrapMode: "none",
+    width: "100%",
+    height: "100%",
+  })
+  todoPanel.add(todoText)
   listPanel.add(listText)
   detailPanel.add(detailText)
-  content.add(listPanel)
+  leftColumn.add(listPanel)
+  leftColumn.add(todoPanel)
+  content.add(leftColumn)
   content.add(detailPanel)
   shell.add(header)
   shell.add(content)
   shell.add(footer)
   renderer.root.add(shell)
 
-  let snapshot = loadTaskRecords(options.stateDir)
-  let items = projectTaskTree(snapshot.records)
-  let navigation = initialNavigation(items)
-  let paused = false
-  let lastReadError: string | undefined
+  let state: ViewerState = initialViewerState([])
+  let data: ViewerData = {
+    items: [],
+    transcript: EMPTY_TRANSCRIPT,
+    projectDir: options.projectDir,
+    refreshMs: options.refreshMs,
+    invalidRecords: 0,
+  }
+  let dataTargetKey: string | undefined
+  let frame: ViewerFrame | undefined
   let closed = false
+  let scheduled = false
+  let focusSelection = false
 
-  const itemById = (): Map<string, TaskTreeItem> => new Map(items.map((item) => [item.id, item]))
+  const widthOf = (renderable: TextRenderable): number =>
+    Number.isFinite(renderable.width) && renderable.width > 0 ? Math.floor(renderable.width) : 0
+  const heightOf = (renderable: TextRenderable): number =>
+    Number.isFinite(renderable.height) && renderable.height > 0 ? Math.floor(renderable.height) : 0
+  const measure = (): ViewerViewport => {
+    const contentWidth = Math.max(20, renderer.width - 2)
+    const listPanelWidth = Math.max(10, Math.floor(contentWidth * 0.35))
+    return {
+      listWidth: widthOf(listText) || Math.max(10, listPanelWidth - 4),
+      listHeight: heightOf(listText) || Math.max(3, renderer.height - 12),
+      detailWidth: widthOf(detailText) || Math.max(20, contentWidth - listPanelWidth - 5),
+      detailHeight: heightOf(detailText) || Math.max(3, renderer.height - 12),
+      todoWidth: widthOf(todoText) || Math.max(10, listPanelWidth - 4),
+      todoHeight: Math.max(4, Math.min(10, Math.floor(renderer.height * 0.3))),
+    }
+  }
+  const context = (): ViewerContext => ({
+    items: data.items,
+    transcript: data.transcript,
+    limits: frame?.limits ?? ZERO_LIMITS,
+  })
 
-  const render = (): void => {
-    const selected = itemById().get(navigation.selectedId ?? "")
-    const viewed = itemById().get(navigation.viewId ?? "")
-    const selectedRoot = selected?.rootSessionId ?? viewed?.rootSessionId
-    const selectedTranscript = viewed?.kind === "task"
-      ? readTaskTranscript(options.stateDir, viewed.id)
-      : viewed?.kind === "main"
-        ? readRootSessionTranscript(options.agentDir, viewed.rootSessionId)
-        : []
-    const maxTranscriptRows = Math.max(3, renderer.height - (viewed?.kind === "main" ? 24 : 22))
-    const transcript = visibleTranscript(selectedTranscript, maxTranscriptRows, navigation.scrollOffset)
-    const visibleItems = visibleNavigationItems(items, navigation.selectedId, Math.max(1, renderer.height - 13))
-    const firstVisibleIndex = items.findIndex((item) => item.id === visibleItems[0]?.id)
-    const lastVisibleIndex = firstVisibleIndex + visibleItems.length
+  const targetFor = (
+    current: ViewerState,
+    items: readonly TaskTreeItem[],
+  ): { readonly key: string; readonly read: () => TranscriptDocument } | undefined => {
+    const viewed = viewedItem(current, items)
+    if (viewed === undefined) return undefined
+    if (viewed.kind === "main") {
+      const readOptions = { maxBytes: options.readBytes }
+      return { key: `main:${viewed.rootSessionId}`, read: () => readRootDocument(options.agentDir, viewed.rootSessionId, readOptions) }
+    }
+    const readOptions = { maxBytes: options.readBytes }
+    return { key: `task:${viewed.id}`, read: () => readTaskDocument(options.stateDir, viewed.id, readOptions) }
+  }
 
-    header.content = `OMO AGENTS  •  ${safeText(options.projectDir)}  •  ${paused ? "paused" : `refresh ${options.refreshMs}ms`}${snapshot.invalidRecords > 0 ? `  •  ${snapshot.invalidRecords} unreadable` : ""}`
-    listText.content = renderTaskList(
-      visibleItems,
-      navigation.selectedId,
-      items.length > 0 && firstVisibleIndex > 0,
-      lastVisibleIndex < items.length,
-    )
-    detailText.content = renderDetail(viewed, items, selectedRoot, selectedTranscript, transcript, lastReadError)
+  const loadStore = (): StoreLoad => {
+    try {
+      const snapshot = loadTaskRecords(options.stateDir)
+      return { items: projectTaskTree(snapshot.records), invalidRecords: snapshot.invalidRecords }
+    } catch (error) {
+      return { items: [], invalidRecords: 0, error: error instanceof Error ? error.message : String(error) }
+    }
+  }
+
+  const loadTarget = (current: ViewerState, items: readonly TaskTreeItem[]): TargetLoad => {
+    const target = targetFor(current, items)
+    if (target === undefined) return { transcript: EMPTY_TRANSCRIPT }
+    try {
+      return { transcript: target.read(), key: target.key }
+    } catch (error) {
+      return { transcript: EMPTY_TRANSCRIPT, key: target.key, error: error instanceof Error ? error.message : String(error) }
+    }
+  }
+
+  const renderFrame = (): void => {
+    const viewport = measure()
+    let next = projectViewer(state, data, viewport)
+    if (focusSelection && next.focusOffset !== undefined) {
+      state = { ...state, scrollOffset: next.focusOffset }
+      next = projectViewer(state, data, viewport)
+    }
+    focusSelection = false
+    const clamped = clampViewer(state, next.limits)
+    if (clamped !== state) {
+      state = clamped
+      next = projectViewer(state, data, viewport)
+    }
+    frame = next
+    const todoVisible = frame.todo !== undefined
+    todoPanel.visible = todoVisible
+    todoPanel.height = todoVisible ? (frame.todo?.lines.length ?? 0) + 4 : 0
+    todoText.content = todoVisible && frame.todo !== undefined ? paneContent(frame.todo) : ""
+    listPanel.borderColor = state.focus === "tree" ? RAIL_COLOR : "#34405e"
+    detailPanel.borderColor = state.focus === "transcript" ? RAIL_COLOR : "#34405e"
+    todoPanel.borderColor = state.focus === "todo" ? RAIL_COLOR : "#34405e"
+    header.content = frame.header
+    footer.content = frame.footer
+    listText.content = paneContent(frame.list)
+    detailText.content = paneContent(frame.detail)
+    listText.scrollY = 0
+    detailText.scrollY = 0
     renderer.requestRender()
   }
 
-  const refresh = (): void => {
-    if (paused || closed) return
-    try {
-      snapshot = loadTaskRecords(options.stateDir)
-      items = projectTaskTree(snapshot.records)
-      navigation = reconcileNavigation(navigation, items)
-      lastReadError = undefined
-    } catch (error) {
-      lastReadError = error instanceof Error ? error.message : String(error)
+  const scheduleRender = (): void => {
+    if (scheduled || closed) return
+    scheduled = true
+    setImmediate(() => {
+      scheduled = false
+      if (!closed) renderFrame()
+    })
+  }
+  listText.onSizeChange = scheduleRender
+  detailText.onSizeChange = scheduleRender
+
+  const reload = (force = false): void => {
+    if (closed) return
+    if (state.paused && !force) return
+    const store = loadStore()
+    state = reconcileViewer(state, store.items)
+    const loaded = loadTarget(state, store.items)
+    state = reconcileViewer(state, store.items, loaded.transcript)
+    data = {
+      items: store.items,
+      transcript: loaded.transcript,
+      projectDir: options.projectDir,
+      refreshMs: options.refreshMs,
+      invalidRecords: store.invalidRecords,
+      error: store.error ?? loaded.error,
     }
-    render()
+    dataTargetKey = loaded.key
+    renderFrame()
+  }
+
+  const dispatch = (input: ViewerInput): void => {
+    const previousTurn = state.selectedTurnId
+    state = updateViewer(state, input, context())
+    focusSelection = state.selectedTurnId !== previousTurn && state.selectedTurnId !== undefined
+    const target = targetFor(state, data.items)
+    if (target === undefined) {
+      state = reconcileViewer(state, data.items, EMPTY_TRANSCRIPT)
+      data = { ...data, transcript: EMPTY_TRANSCRIPT }
+      dataTargetKey = undefined
+    } else if (target.key !== dataTargetKey) {
+      const loaded = loadTarget(state, data.items)
+      state = reconcileViewer(state, data.items, loaded.transcript)
+      data = { ...data, transcript: loaded.transcript, error: loaded.error }
+      dataTargetKey = loaded.key
+    }
+    renderFrame()
   }
 
   const shutdown = (): void => {
@@ -126,130 +290,113 @@ export async function runViewer(options: ViewerOptions): Promise<void> {
   renderer.keyInput.on("keypress", (key) => {
     if (key.ctrl && key.name === "c") return shutdown()
     if (key.name === "q") return shutdown()
-    if (key.name === "up") navigation = moveSelection(navigation, -1, items)
-    else if (key.name === "down") navigation = moveSelection(navigation, 1, items)
-    else if (key.name === "return" || key.name === "enter") navigation = openSelection(navigation, items)
-    else if (key.name === "escape") navigation = returnToMain(navigation, items)
-    else if (key.name === "r") {
-      paused = false
-      refresh()
-      return
-    } else if (key.name === "p") paused = !paused
-    else if (key.name === "g") navigation = followTranscript(navigation)
-    else if (key.name === "k" && itemById().has(navigation.viewId ?? ""))
-      navigation = adjustScroll(navigation, 1)
-    else if (key.name === "j" && itemById().has(navigation.viewId ?? ""))
-      navigation = adjustScroll(navigation, -1)
-    else return
-    render()
+    if (key.name === "up") return dispatch({ type: "move", delta: -1 })
+    if (key.name === "down") return dispatch({ type: "move", delta: 1 })
+    if (key.name === "return" || key.name === "enter" || key.name === "right") return dispatch({ type: "open" })
+    if (key.name === "left") return dispatch({ type: "exit-level" })
+    if (key.name === "escape") return dispatch({ type: "back" })
+    if (key.name === "t") return dispatch({ type: "toggle-turn" })
+    if (key.name === "tab") return dispatch({ type: "cycle-focus" })
+    if (key.name === "1") return dispatch({ type: "toggle-filter", filter: "completed" })
+    if (key.name === "2") return dispatch({ type: "toggle-filter", filter: "running" })
+    if (key.name === "3") return dispatch({ type: "toggle-filter", filter: "stopped" })
+    if (key.name === "4") return dispatch({ type: "toggle-todo-done" })
+    if (key.name === "l") return dispatch({ type: "toggle-todo" })
+    if (key.name === "j") return dispatch({ type: "scroll-transcript", direction: "newer", amount: 1 })
+    if (key.name === "k") return dispatch({ type: "scroll-transcript", direction: "older", amount: 1 })
+    if (key.name === "g") return dispatch({ type: "follow" })
+    if (key.name === "p") return dispatch({ type: "toggle-pause" })
+    if (key.name === "r") {
+      state = updateViewer(state, { type: "set-paused", paused: false }, context())
+      reload(true)
+    }
   })
 
-  const timer = setInterval(refresh, options.refreshMs)
-  render()
+  const rowAt = (text: TextRenderable, screenY: number): number | undefined => {
+    const row = screenY - text.screenY
+    return row >= 0 ? row : undefined
+  }
+
+  listPanel.onMouseDown = (event) => {
+    if (event.button !== 0) return
+    const row = rowAt(listText, event.y)
+    const hit = row === undefined ? undefined : frame?.list.hits[row]
+    if (hit?.kind === "item") dispatch({ type: "open-item", id: hit.id })
+  }
+
+  detailPanel.onMouseDown = (event) => {
+    if (event.button !== 0) return
+    const row = rowAt(detailText, event.y)
+    const hit = row === undefined ? undefined : frame?.detail.hits[row]
+    if (hit?.kind === "turn") dispatch({ type: "expand-turn", id: hit.id })
+  }
+
+  listPanel.onMouseScroll = (event) => {
+    const direction = event.scroll?.direction
+    if (direction !== "up" && direction !== "down") return
+    const step = scrollStep(event)
+    dispatch({ type: "move-selection", delta: direction === "up" ? -step : step })
+  }
+
+  detailPanel.onMouseScroll = (event) => {
+    const direction = event.scroll?.direction
+    if (direction !== "up" && direction !== "down") return
+    const step = scrollStep(event)
+    dispatch({ type: "scroll-transcript", direction: direction === "up" ? "older" : "newer", amount: step })
+  }
+
+  todoPanel.onMouseDown = () => dispatch({ type: "set-focus", focus: "todo" })
+
+  const timer = setInterval(() => reload(), options.refreshMs)
+  reload(true)
 }
 
-function renderTaskList(
-  items: readonly TaskTreeItem[],
-  selectedId: string | undefined,
-  hasMoreAbove: boolean,
-  hasMoreBelow: boolean,
-): string {
-  if (items.length === 0) return "SESSION / AGENT TREE\n\nNo task records yet.\nKeep this view open while OmO delegates."
-  const lines = ["SESSION / AGENT TREE", ...(hasMoreAbove ? ["↑ more above"] : [])]
-  for (const item of items) {
-    const active = item.id === selectedId
-    const prefix = active ? "› " : "  "
-    if (item.kind === "main") {
-      lines.push(`${prefix}◆ Main session  ${item.rootSessionId.slice(0, 12)}`)
-      continue
+function scrollStep(event: { readonly scroll?: { readonly delta: number } }): number {
+  return Math.max(1, Math.min(5, Math.abs(event.scroll?.delta ?? 1)))
+}
+
+type Chunk = { readonly __isChunk: true; readonly text: string; readonly fg?: RGBA; readonly bg?: RGBA }
+
+export function paneContent(pane: PaneFrame): StyledText {
+  const chunks: Chunk[] = []
+  pane.lines.forEach((line, index) => {
+    if (index > 0) chunks.push({ __isChunk: true, text: "\n" })
+    const style = pane.styles?.[index]
+    if (style?.rail === true) {
+      chunks.push({ __isChunk: true, text: "  ", bg: RGBA.fromHex(style.railColor ?? RAIL_COLOR) })
     }
-    const task = item.task
-    if (task === undefined) continue
-    const indent = "  ".repeat(Math.max(0, item.depth - 1))
-    const glyph = statusGlyph(task.status)
-    const name = safeText(task.name ?? task.task_summary ?? task.description ?? task.task_id)
-    lines.push(`${prefix}${indent}${glyph} ${name}`)
-    lines.push(`    ${indent}${task.status.toUpperCase()}  ${elapsed(task)}`)
+    const cells = pane.cells?.[index]
+    if (cells === undefined) {
+      chunks.push(styledChunk(line, style))
+      return
+    }
+    for (const cell of cells) {
+      chunks.push(cellChunk(cell))
+    }
+  })
+  return new StyledText(chunks)
+}
+
+function cellChunk(cell: PreviewCell): Chunk {
+  let chunk: Chunk = {
+    __isChunk: true,
+    text: cell.text,
+    ...(cell.fg === undefined ? {} : { fg: RGBA.fromHex(cell.fg) }),
+    ...(cell.bg === undefined ? {} : { bg: RGBA.fromHex(cell.bg) }),
   }
-  if (hasMoreBelow) lines.push("↓ more below")
-  return lines.join("\n")
+  if (cell.bold === true) chunk = bold(chunk)
+  if (cell.dim === true) chunk = dim(chunk)
+  return chunk
 }
 
-function renderDetail(
-  item: TaskTreeItem | undefined,
-  items: readonly TaskTreeItem[],
-  rootSession: string | undefined,
-  allTranscript: readonly string[],
-  visible: readonly string[],
-  error: string | undefined,
-): string {
-  if (error !== undefined) return `STORE ERROR\n\n${safeText(error)}\n\nThe viewer is read-only. Fix the path or restart with --state-dir.`
-  if (item === undefined) return "No session selected."
-  if (item.kind === "main") {
-    const tasks = items.filter((candidate) => candidate.kind === "task" && candidate.rootSessionId === item.rootSessionId)
-    const counts = countStatuses(tasks)
-    return [
-      "MAIN SESSION",
-      "",
-      `Session  ${item.rootSessionId}`,
-      `Agents   ${tasks.length}`,
-      `Running  ${counts.running ?? 0}`,
-      `Queued   ${counts.pending ?? 0}`,
-      `Done     ${counts.completed ?? 0}`,
-      `Failed   ${(counts.error ?? 0) + (counts.lost ?? 0)}`,
-      "",
-      "Choose an agent from the left and press Enter to follow its transcript.",
-      "Escape from any agent view returns here.",
-      "",
-      `TRANSCRIPT  ${allTranscript.length} lines`,
-      "",
-      ...(visible.length === 0 ? ["(waiting for main-session output…)"] : visible),
-    ].join("\n")
+function styledChunk(text: string, style: RowStyle | undefined): Chunk {
+  let chunk: Chunk = {
+    __isChunk: true,
+    text,
+    ...(style?.fg === undefined ? {} : { fg: RGBA.fromHex(style.fg) }),
+    ...(style?.bg === undefined ? {} : { bg: RGBA.fromHex(style.bg) }),
   }
-
-  const task = item.task
-  if (task === undefined) return "Agent record disappeared. Refreshing the tree…"
-  const heading = [
-    `AGENT  ${safeText(task.name ?? task.task_summary ?? task.task_id)}`,
-    "",
-    `Status    ${task.status}`,
-    `Started   ${task.started_at ?? task.created_at}`,
-    `Elapsed   ${elapsed(task)}`,
-    task.category === undefined ? undefined : `Category  ${safeText(task.category)}`,
-    task.agent_type === undefined ? undefined : `Agent     ${safeText(task.agent_type)}`,
-    task.model === undefined ? undefined : `Model     ${safeText(task.model)}`,
-    `Task ID   ${task.task_id}`,
-    "",
-    `TRANSCRIPT  ${allTranscript.length} lines  •  ${item.rootSessionId === rootSession ? "current session" : "other session"}`,
-    "",
-  ].filter((line): line is string => line !== undefined)
-  return [...heading, ...(visible.length === 0 ? ["(waiting for transcript output…)"] : visible)].join("\n")
-}
-
-function countStatuses(items: readonly TaskTreeItem[]): Record<string, number> {
-  const counts: Record<string, number> = {}
-  for (const item of items) {
-    const status = item.task?.status ?? "unknown"
-    counts[status] = (counts[status] ?? 0) + 1
-  }
-  return counts
-}
-
-function statusGlyph(status: string): string {
-  if (status === "running") return "●"
-  if (status === "pending") return "◦"
-  if (status === "completed") return "✓"
-  if (status === "error" || status === "lost") return "✗"
-  if (status === "cancelled" || status === "interrupted") return "‖"
-  return "?"
-}
-
-function elapsed(task: TaskRecord): string {
-  const started = Date.parse(task.started_at ?? task.created_at)
-  const ended = task.terminal_at === undefined ? Date.now() : Date.parse(task.terminal_at)
-  if (!Number.isFinite(started) || !Number.isFinite(ended) || ended < started) return "—"
-  const seconds = Math.floor((ended - started) / 1000)
-  if (seconds < 60) return `${seconds}s`
-  if (seconds < 3600) return `${Math.floor(seconds / 60)}m${String(seconds % 60).padStart(2, "0")}s`
-  return `${Math.floor(seconds / 3600)}h${String(Math.floor((seconds % 3600) / 60)).padStart(2, "0")}m`
+  if (style?.bold === true) chunk = bold(chunk)
+  if (style?.dim === true) chunk = dim(chunk)
+  return chunk
 }

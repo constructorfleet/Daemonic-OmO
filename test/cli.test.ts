@@ -18,6 +18,12 @@ describe("CLI arguments", () => {
     expect(() => parseArgs(["--refresh-ms", "10"])).toThrow("--refresh-ms must be an integer")
   })
 
+  test("#given a read budget #when parsed #then it defaults to 4 MiB and accepts overrides", () => {
+    expect(parseArgs([]).readBytes).toBe(4 * 1024 * 1024)
+    expect(parseArgs(["--read-bytes", "8388608"]).readBytes).toBe(8 * 1024 * 1024)
+    expect(() => parseArgs(["--read-bytes", "1024"])).toThrow("--read-bytes must be an integer")
+  })
+
   test("#given an unknown option #when parsed #then it is rejected", () => {
     expect(() => parseArgs(["--someday"])).toThrow("unknown option")
   })

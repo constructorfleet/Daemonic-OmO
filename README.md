@@ -33,18 +33,36 @@ The viewer discovers the configured OmO Native agent directory and falls back to
 
 ## Keys
 
-- `↑` / `↓`: select a main session or task
-- `Enter`: open the selected session or follow a task transcript
-- `Esc`: return to the main session
-- `j` / `k`: scroll the open transcript
-- `g`: jump to the latest transcript output
+- `↑` / `↓`: select a main session or task; with the turn list focused, step between turns; with the todo pane focused, scroll it
+- `Enter` / `→`: open the selected session or task and focus its turn list with the newest turn selected; with the turn list focused, open the selected turn's detail inline
+- `←`: back one level (close the turn detail, then return focus to the task list)
+- `Esc`: close the expanded turn, then return to the main session
+- `Tab`: move focus between the task list, the transcript, and the todo pane
+- `1` / `2` / `3`: hide or show completed, running (running and queued), and stopped (paused, cancelled, interrupted) tasks
+- `t`: open the newest turn's detail inline in the transcript (thinking, exact tool arguments, results); press again to close it
+- `l`: show or hide the todo pane
+- `4`: hide or show completed todo items
+- `j` / `k`: scroll the focused pane (the transcript, or the todo pane when it has focus)
+- `g`: jump to the latest transcript output, and to the newest turn when one is expanded
 - `p`: pause or resume refresh
 - `r`: refresh now
 - `q`: quit
 
-The task list follows the selected row as you move with `↑` / `↓`. The main-session view reads the root session transcript, and `j` / `k` scroll either root or agent output. In wrap mode, switch to the OmO pane and use `/task-kill` to choose and cancel a task.
+An expanded turn is drawn inside the transcript, right after its own lines, and the view recenters on it as you step from turn to turn; `j` / `k` scroll the same transcript. Expanding a turn never hides the conversation around it. The turn list cursor marks the selected turn with a left rail and a tinted row background even before its detail is open, and the footer names the open turn as `TURN 3 / 12`, so the pointer stays visible even after scrolling away. The rail is blue in the pane you are driving; the other pane keeps its selection with a gray rail, and the focused pane's border turns blue.
 
-The viewer refreshes task records and transcript logs every second by default. Set `--refresh-ms` from 250 to 10000 to change the interval. It only reads task-store and session files. To cancel a task, use OmO's `/task-kill` command in the owning OmO session; the external terminal control API does not expose task-specific cancellation.
+When the agent uses the todo tool, a todo pane sits under the task list at the same width: `TODO 4/15` with the `Now` and `Next` lines, then every phase with its progress and items (`✓` done, `●` in progress, `○` pending). The pane comes from the last todo tool result in the loaded session window and sizes itself to the list up to about a third of the screen; when the list is longer, completed items drop first and the pane scrolls with `↑` / `↓` (or `j` / `k`) once `Tab` focuses it, showing its row range at the bottom. `4` hides completed items, and `l` hides or shows the pane.
+
+Transcript rows are colored by kind: assistant text blue, thinking gray and dim, tool calls amber, results green, errors red. The tree colors each task by status (running amber, done green, failed/lost red); the selected task gets a bright left rail and a tinted pair of rows, matching the turn cursor. Filters are shown after the tree title (for example `–completed`) and filtered tasks never swallow the selected or viewed task, which stays visible.
+
+When the agent reads or inspects an image, the expanded turn shows that image as a half-block preview with its pixel size and MIME type (up to three images per turn). Previews are colored `▀` cells, so they work in any terminal, inside tmux, and without kitty or sixel support.
+
+Mouse: the wheel scrolls the tree or the open transcript. Click a task in the tree to open it, or click any line in a session or agent transcript to expand that turn inline; click it again to close.
+
+The task list follows the selected row as you move with `↑` / `↓`. The main-session view uses the same transcript detail and inline turn expansion as agent views, including root-session turns; `j` / `k` scroll either root or agent output. In wrap mode, switch to the OmO pane and use `/task-kill` to choose and cancel a task.
+
+The viewer refreshes task records and the viewed transcript document on the refresh interval, then renders from the loaded document without doing I/O. Set `--refresh-ms` from 250 to 10000 to change the interval; `p` pauses reads and `r` resumes and reloads immediately. It only reads task-store and session files. To cancel a task, use OmO's `/task-kill` command in the owning OmO session; the external terminal control API does not expose task-specific cancellation.
+
+Reads stay bounded: the viewer reads at most the last 4 MiB of the selected root or child session per file (at most the first and last file when a task has several), plus the small per-task event log. Set `--read-bytes` from 65536 to 67108864 to trade memory and parse time for more history. It never loads a whole conversation, and turn expansion works on that same tail window. Images are stored inline in those session entries as base64, so a preview appears only when the entry fits inside the read window; raise `--read-bytes` to reach older or larger images. Decoded previews are cached by content and the base64 payload is never rendered as text.
 
 ## Development
 
@@ -52,5 +70,7 @@ The viewer refreshes task records and transcript logs every second by default. S
 bun test
 bun run build
 ```
+
+The code is split into a pure viewer model (interaction state and pane projection), a task-store module (layout, records, and transcript documents), transcript parsing/formatting, and a thin OpenTUI adapter. Tests cross the model and store interfaces rather than driving the terminal.
 
 The task-store layout is discovered from OmO Native's `senpi-task` store. If upstream changes that on-disk layout, adjust the standalone reader or pass the new location with `--state-dir`; upgrading the upstream source will not overwrite this project.
