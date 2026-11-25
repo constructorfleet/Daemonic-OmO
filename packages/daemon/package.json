@@ -1,0 +1,17 @@
+{
+  "name": "@omo-daemonic/daemon",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "bin": {
+    "omo-daemonic": "./src/cli/main.ts"
+  },
+  "dependencies": {
+    "croner": "^11.0.1",
+    "jsonc-parser": "^3.3.1",
+    "oauth4webapi": "^3.8.9"
+  },
+  "devDependencies": {
+    "oauth2-mock-server": "^9.3.0"
+  }
+}
