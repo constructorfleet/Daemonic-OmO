@@ -21,7 +21,7 @@ Your next move: commit the pending edits in ~/src/omo-agent-viewer, then start e
 
 ---
 
-> TL;DR (machine): XL, high risk; Bun monorepo (store, tui, daemon, web) - thread-SDK observer/gateway daemon with OIDC multi-user, scheduler, loops, graph UI and omo-agents parity; 29 todos + F1-F4.
+> TL;DR (machine): XL, high risk; Bun monorepo (store, tui, daemon, web) - thread-SDK observer/gateway daemon with OIDC multi-user, scheduler, loops, graph UI and omo-agents parity; 31 implementation todos + F1-F4.
 
 ## Scope
 ### Affected user and ideal state
@@ -58,6 +58,8 @@ Your next move: commit the pending edits in ~/src/omo-agent-viewer, then start e
 | GAP-14 | Projects omo already knows about are not discoverable from its hashed store names | IS-1 |
 | GAP-15 | Provisioning a second omo identity could redirect omo's own session-host LaunchAgent | IS-11 (U2 untouched) |
 | GAP-16 | Worktree runs write task stores and sessions under the worktree path, outside the project's store | IS-1, IS-2, IS-6 |
+| GAP-17 | Todo 6's browser capture does not identify the local origin/owned engine, and its code-quality/spec review artifact is missing | IS-1 and final F2 evidence |
+| GAP-18 | The web shell misidentifies the root Projects route and omits stable test ids on two interactive links | IS-1 |
 
 ### Must have
 - Bun 1.4.4 workspace monorepo at `/Users/tglenn/src/omo-daemonic` with packages `store`, `tui`, `daemon`, `web`; strict TypeScript; `bun test`.
@@ -116,7 +118,7 @@ This section supersedes the detail design (`.omo/reference/omo-daemonic-detail-d
 
 - Wave 0: 1
 - Wave 1: 2, 4, 6
-- Wave 2: 3, 5, 7, 8
+- Wave 2: 3, 5, 7, 8, 30, 31
 - Wave 3: 9, 10, 28
 - Wave 4: 11, 12
 - Wave 5: 13, 14
@@ -150,7 +152,7 @@ Shared-file rules that make the waves safe: all daemon dependencies are added by
 | 17 | packages/daemon/src/scheduler/**, features/scheduler.ts | 15 (dispatch target) | 24, 26 |
 | 18 | packages/daemon/src/loops/**, features/loops.ts | 15 (iteration runs) | 24 |
 | 19 | packages/daemon/src/features/omo-native.ts | 12 (CLI/bridge), 13 (DAG/schedule docs) | 22, 24 |
-| 20 | packages/web/src/{lib/**,routes/projects*,routes/login*} | 6 (shell), 11 (SSE), 14 (projects API) | 21, 23, 24, 25 |
+| 20 | packages/web/src/{lib/**,routes/projects*,routes/login*} | 6 (shell), 11 (SSE), 14 (projects API), 31 (verified browser origin and shell evidence) | 21, 23, 24, 25 |
 | 21 | packages/web/src/routes/sessions*, features/transcript/** | 20 (client), 13 (docs) | 22 |
 | 22 | packages/web/src/routes/graph*, features/graph/** | 21 (transcript drawer), 19 (DAG API) | 27 |
 | 23 | packages/web/src/routes/{runs*,audit*}, features/controls/** | 20, 15, 16 | 27, 29 |
@@ -160,6 +162,8 @@ Shared-file rules that make the waves safe: all daemon dependencies are added by
 | 27 | README.md, docs/adr/**, packages/tui/README.md, packages/daemon/test/docs/** | 22, 24, 25, 26 (final behavior) | F1 |
 | 28 | global bun install (no repo files) | 3 (tui on store) | F4 |
 | 29 | packages/web/e2e-live/**, packages/daemon/test/live/** | 23 (run UI), 24 (schedule UI), 26 (launchd) | F3 |
+| 30 | packages/web/src/{components,tests,e2e} | 6 (shell commit 49c0ad4; review found root-route/test-id defects) | 31 |
+| 31 | .omo/evidence/task-6-omo-daemonic-actions-verified.json, task-6-omo-daemonic-code-review.md | 30 (corrected shell) | 20, F2 |
 
 ## Todos
 > Implementation + Test = ONE todo. Never separate.
@@ -483,6 +487,28 @@ Shared-file rules that make the waves safe: all daemon dependencies are added by
   QA scenarios: happy - Playwright trace + screenshots of the live run and kill switch (Evidence `.omo/evidence/task-29-omo-daemonic/`); failure - stop the user's omo host mid-suite (`OMO_CODING_AGENT_DIR=<dir> omo daemon stop`) and assert the next spawn ensures the host again and succeeds, or fails `host_unavailable` with the banner when ensure is disabled by the test.
   Commit: Y | test: live end-to-end suite against real omo
 
+- [ ] 30. Fix Todo 6 root route and stable test ids
+  Recommended task executor category: visual-engineering
+  What to do: On the Todo 6 branch, first add failing regression tests for `/` resolving to the Projects page title and active Projects nav state, and for stable selectors on the interactive home link and not-found recovery link. Then make the smallest production fix in `packages/web/src/routes/__root.tsx` and `packages/web/src/components/{app-shell,not-found}.tsx`; add `data-testid="home-link"` and `data-testid="not-found-recovery"` without changing other routes or styling. Run the full web unit/e2e/build gates. This fixes the standards finding that `/` displayed Page not found, plus the spec finding that not all interactive elements had stable test ids.
+  Must NOT do: no unrelated UI polish, no changes outside `packages/web/**`, no `.omo` evidence edits, no edits to `bun.lock`, no changes in the old viewer or upstream repo.
+  Closes: GAP-18
+  Parallelization: Wave 2 | Blocked by: 6 (Todo 6 initial shell commit 49c0ad4 exists on its worktree branch) | Blocks: 31
+  References: `.omo/reference/omo-daemonic-detail-design.md`; Todo 6 row and `packages/web/DESIGN.md`; Standards finding `packages/web/src/routes/__root.tsx:7`; Spec findings `packages/web/src/components/app-shell.tsx:26`, `packages/web/src/components/not-found.tsx:6`; initial reports to be retained in `.omo/evidence/task-6-omo-daemonic-code-review-initial.md`.
+  Acceptance criteria: new tests fail before the fix and pass after; `bun test packages/web`, `bun run --cwd packages/web e2e -- --grep shell`, and `bun run --cwd packages/web build` exit 0; on `/`, the h1 is Projects and the Projects nav is active; both required `data-testid` selectors exist and are asserted by tests. Restore only generated `bun.lock` before commit.
+  QA scenarios: happy - `bun run --cwd packages/web e2e -- --grep shell` opens `/` and `/does-not-exist`; PASS iff `/` shows the Projects title/active nav and selectors `home-link`/`not-found-recovery` are asserted; failure - intentionally remove the root-path alias in a scratch copy and show the new `/` regression test fails. Evidence `.omo/evidence/task-6-omo-daemonic-fix.txt`.
+  Commit: Y | fix(web): correct root routing and stable test ids
+
+- [ ] 31. Capture Todo 6 browser provenance and code review
+  Recommended task executor category: visual-engineering
+  What to do: Evidence-only follow-up after Todo 30 fixes the shell; do not edit product code. Start a Vite preview in the Todo 6 worktree with `bun run --cwd packages/web preview -- --host 127.0.0.1 --port 4181 --strictPort` under a watched owned process, then use the browser skill's owned `connectPipe` engine with a temporary profile to visit exactly `http://127.0.0.1:4181/` at 1440x900 and 390x844, and `http://127.0.0.1:4181/does-not-exist`; recapture screenshots to `.omo/evidence/task-6-omo-daemonic-verified-desktop.png`, `...-verified-mobile.png`, `...-verified-not-found.png`. Write `.omo/evidence/task-6-omo-daemonic-actions-verified.json` with actual full URL/origin for each action, engine identity (`connectPipe` plus owned profile path/id), CSS viewport, screenshot path, and preview server PID. Stop the preview process and assert `kill -0 <pid>` fails and `lsof -i :4181` is empty; record server-stop and browser/profile cleanup receipts in the same JSON. Run fresh independent Standards and Spec reviews against the final Todo 6 diff `git diff 7eee597...HEAD`, using the initial findings artifact `.omo/evidence/task-6-omo-daemonic-code-review-initial.md` only as context; aggregate new reports with headings `Standards` and `Spec` into `.omo/evidence/task-6-omo-daemonic-code-review.md`, explicitly recording the `programming` and `remove-ai-slops` perspectives and whether the Todo 30 findings are resolved.
+  Must NOT do: do not edit product code or tests in Todo 31; do not use the user's real browser profile; no placeholder origin, engine id, or cleanup receipt.
+  Closes: GAP-17
+  Parallelization: Wave 2 | Blocked by: 30 (corrected shell behavior) | Blocks: 20 (shell must be proven before dependent pages), F2 (code-review receipt)
+  References: Todo 6 gate report `.omo/evidence/task-6-omo-daemonic.verify.md`; initial review `.omo/evidence/task-6-omo-daemonic-code-review-initial.md`; `packages/web/DESIGN.md`; `packages/web/e2e/shell.e2e.ts`; final code-review diff `git diff 7eee597...HEAD`.
+  Acceptance criteria: action JSON contains the exact local origin `http://127.0.0.1:4181` and an owned-engine/profile identity for every screenshot action; all three screenshot files exist and are visually inspected; `/` shows the Projects title/active nav and both interactive links have stable test ids; `/does-not-exist` still shows the tagged recovery link; preview PID is dead and port 4181 is empty; the final code-review artifact has separate Standards and Spec sections, explicitly covers `programming` and `remove-ai-slops`, and no criterion-cited blocker remains unaddressed. No product code diff is produced by Todo 31.
+  QA scenarios: happy - owned browser visits the exact local URL at desktop/mobile, captures the three named screenshots, action JSON names `connectPipe` and the temporary profile, then cleanup reports PID gone and `lsof -i :4181` empty; review - fresh Standards/Spec reports correspond to `git diff 7eee597...HEAD`, explicitly close the initial code findings, and are stored in `.omo/evidence/task-6-omo-daemonic-code-review.md`.
+  Commit: N | evidence-only; no repository source changes
+
 ## Final verification wave
 > Runs in parallel after ALL todos. ALL must APPROVE. Surface results and wait for the user's explicit okay before declaring complete.
 - [ ] F1. Plan compliance audit
@@ -505,7 +531,7 @@ One commit per todo in `/Users/tglenn/src/omo-daemonic` on `main` (or the execut
 > One row per IS row. The plan is complete only when every IS row has a delivering todo and a proving QA scenario; F4 checks the delivered behavior against these rows 1:1, and a shortfall becomes new `- [ ] N.` rows, never a note.
 | IS | Delivering todo(s) | Proving QA scenario | Evidence |
 | --- | --- | --- | --- |
-| IS-1 | 9, 11, 13, 14, 20 | 20 e2e: live update from second context within 2 s; 21 qa-task-1 within 2 s; 13 real-root-session doc; 14 discovered projects | .omo/evidence/task-20-omo-daemonic-*.png, task-13-omo-daemonic.txt |
+| IS-1 | 9, 11, 13, 14, 20, 30, 31 | 20 e2e: live update from second context within 2 s; 21 qa-task-1 within 2 s; 13 real-root-session doc; 14 discovered projects; 30 fixes root Projects routing; 31 records local origin + owned browser engine | .omo/evidence/task-20-omo-daemonic-*.png, task-13-omo-daemonic.txt, task-6-omo-daemonic-actions-verified.json |
 | IS-2 | 3, 9, 13, 21 | 21 parity e2e + side-by-side with omo-agents | .omo/evidence/task-21-omo-daemonic-parity.md |
 | IS-3 | 12, 15, 16, 23, 29 | 15 live run OK -> succeeded; 16 live follow_up send; 23 runs e2e; 29 live browser run ODM-LIVE-OK | .omo/evidence/task-15-omo-daemonic.log, task-16-omo-daemonic.log, task-23-omo-daemonic-*.png |
 | IS-4 | 17, 24 | 17 DST/misfire/failpoint tests; 24 schedules e2e | .omo/evidence/task-17-omo-daemonic.txt, task-24-omo-daemonic-*.png |

@@ -1,24 +1,24 @@
 ---
 slug: omo-daemonic
-status: approved
+status: review_unavailable_after_ulw-execute
 intent: clear
 review_required: true
 plan_path: .omo/plans/omo-daemonic.md
-plan_sha256: 9966fa8fd1a32cd73b1fc04aa5717e1586a2a80a97d3f5079775e01845cf6eb6
-review_round_id: r5-mwvm7rle
-review_round_limit: 5
-pending-action: none - plan complete
+plan_sha256: 2bc49067cb3e284bd962c435d7ace419a74fa93db518bf76dae3c336918026c6
+review_round_id: r6-20261125-t6proof
+review_round_limit: 6
+pending-action: final F1/gate reviewer must audit execution amendment
 review:
   plan_reviewer:
-    status: approved
+    status: inconclusive
     workspace_root: /Users/tglenn/src/omo-daemonic
     runtime_home: null
     target: .omo/plans/omo-daemonic.md
-    round_id: r5-mwvm7rle
-    plan_sha256: 9966fa8fd1a32cd73b1fc04aa5717e1586a2a80a97d3f5079775e01845cf6eb6
-    launch_id: l5-c0fd11bd
-    session: st_01a210ee
-    result: OKAY (plan approved; four non-blocking notes), round 5, session st_01a210ee
+    round_id: r6-20261125-t6proof
+    plan_sha256: 20602bfe7811ff260a525a7025d2bfa816b2656ca213f454673e305a2075be3a
+    launch_id: l6-t6proof
+    session: null
+    result: "Round r6 plan-reviewer dispatch was refused because ulw-execute is active; no session/review receipt. Attempted snapshot SHA 20602bfe...05be3a. Current amended plan SHA 2bc49067...8026c6; final F1/execution gate reviewer must audit Todo30/31 before completion."
 approach: Bun workspace monorepo (store, tui, daemon, web); observer+gateway design - per-user omo operator hosts run agents, daemon controls via thread SDK bridge and reads omo state from disk; own scheduler/loops/runs/audit in SQLite; OIDC multi-user with per-user agent dirs; React+xyflow web UI at omo-agents parity; launchd; TDD + live contract suite
 ---
 
