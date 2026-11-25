@@ -1,7 +1,8 @@
 import { BoxRenderable, RGBA, StyledText, TextRenderable, bold, createCliRenderer, dim } from "@opentui/core"
 
+import { isTerminalDagState } from "./dag.js"
 import { projectTaskTree, type TaskTreeItem } from "./state.js"
-import { loadTaskRecords, readRootDocument, readTaskDocument } from "./task-store.js"
+import { loadDagRuns, loadTaskRecords, readRootDocument, readTaskActivity, readTaskDocument } from "./task-store.js"
 import type { TranscriptDocument } from "./transcript.js"
 import type { PreviewCell } from "./image-preview.js"
 import {
@@ -75,13 +76,19 @@ export async function runViewer(options: ViewerOptions): Promise<void> {
     borderColor: "#34405e",
   })
   const detailPanel = new BoxRenderable(renderer, {
-    width: "65%",
-    height: "100%",
+    width: "100%",
+    flexGrow: 1,
     flexDirection: "column",
     padding: 1,
     border: true,
     borderStyle: "rounded",
     borderColor: "#34405e",
+  })
+  const rightColumn = new BoxRenderable(renderer, {
+    width: "65%",
+    height: "100%",
+    flexDirection: "column",
+    gap: 1,
   })
   const listText = new TextRenderable(renderer, {
     content: "",
@@ -122,12 +129,33 @@ export async function runViewer(options: ViewerOptions): Promise<void> {
     height: "100%",
   })
   todoPanel.add(todoText)
+  const terminalsPanel = new BoxRenderable(renderer, {
+    width: "100%",
+    height: 0,
+    flexDirection: "column",
+    padding: 1,
+    border: true,
+    borderStyle: "rounded",
+    borderColor: "#34405e",
+    visible: false,
+  })
+  const terminalsText = new TextRenderable(renderer, {
+    content: "",
+    fg: "#cbd5e1",
+    selectable: false,
+    wrapMode: "none",
+    width: "100%",
+    height: "100%",
+  })
+  terminalsPanel.add(terminalsText)
   listPanel.add(listText)
   detailPanel.add(detailText)
   leftColumn.add(listPanel)
   leftColumn.add(todoPanel)
+  rightColumn.add(detailPanel)
+  rightColumn.add(terminalsPanel)
   content.add(leftColumn)
-  content.add(detailPanel)
+  content.add(rightColumn)
   shell.add(header)
   shell.add(content)
   shell.add(footer)
@@ -161,6 +189,8 @@ export async function runViewer(options: ViewerOptions): Promise<void> {
       detailHeight: heightOf(detailText) || Math.max(3, renderer.height - 12),
       todoWidth: widthOf(todoText) || Math.max(10, listPanelWidth - 4),
       todoHeight: Math.max(4, Math.min(10, Math.floor(renderer.height * 0.3))),
+      terminalsWidth: widthOf(terminalsText) || Math.max(20, contentWidth - listPanelWidth - 5),
+      terminalsHeight: Math.max(4, Math.min(12, Math.floor(renderer.height * 0.3))),
     }
   }
   const context = (): ViewerContext => ({
@@ -174,7 +204,7 @@ export async function runViewer(options: ViewerOptions): Promise<void> {
     items: readonly TaskTreeItem[],
   ): { readonly key: string; readonly read: () => TranscriptDocument } | undefined => {
     const viewed = viewedItem(current, items)
-    if (viewed === undefined) return undefined
+    if (viewed === undefined || viewed.kind === "run") return undefined
     if (viewed.kind === "main") {
       const readOptions = { maxBytes: options.readBytes }
       return { key: `main:${viewed.rootSessionId}`, read: () => readRootDocument(options.agentDir, viewed.rootSessionId, readOptions) }
@@ -186,7 +216,19 @@ export async function runViewer(options: ViewerOptions): Promise<void> {
   const loadStore = (): StoreLoad => {
     try {
       const snapshot = loadTaskRecords(options.stateDir)
-      return { items: projectTaskTree(snapshot.records), invalidRecords: snapshot.invalidRecords }
+      const dag = loadDagRuns(options.stateDir)
+      const activity = new Map<string, string>()
+      for (const run of dag.runs) {
+        for (const node of run.nodes) {
+          if (node.taskId === undefined || isTerminalDagState(node.state) || activity.has(node.taskId)) continue
+          const text = readTaskActivity(options.stateDir, node.taskId)
+          if (text !== undefined) activity.set(node.taskId, text)
+        }
+      }
+      return {
+        items: projectTaskTree(snapshot.records, { runs: dag.runs, activity }),
+        invalidRecords: snapshot.invalidRecords + dag.invalidRuns,
+      }
     } catch (error) {
       return { items: [], invalidRecords: 0, error: error instanceof Error ? error.message : String(error) }
     }
@@ -220,6 +262,10 @@ export async function runViewer(options: ViewerOptions): Promise<void> {
     todoPanel.visible = todoVisible
     todoPanel.height = todoVisible ? (frame.todo?.lines.length ?? 0) + 4 : 0
     todoText.content = todoVisible && frame.todo !== undefined ? paneContent(frame.todo) : ""
+    const terminalsVisible = frame.terminals !== undefined
+    terminalsPanel.visible = terminalsVisible
+    terminalsPanel.height = terminalsVisible ? (frame.terminals?.lines.length ?? 0) + 4 : 0
+    terminalsText.content = terminalsVisible && frame.terminals !== undefined ? paneContent(frame.terminals) : ""
     listPanel.borderColor = state.focus === "tree" ? RAIL_COLOR : "#34405e"
     detailPanel.borderColor = state.focus === "transcript" ? RAIL_COLOR : "#34405e"
     todoPanel.borderColor = state.focus === "todo" ? RAIL_COLOR : "#34405e"
@@ -287,11 +333,24 @@ export async function runViewer(options: ViewerOptions): Promise<void> {
     renderer.destroy()
   }
 
+  const scrollPage = (direction: "older" | "newer"): void => {
+    const sign = direction === "older" ? -1 : 1
+    if (state.focus === "tree") {
+      const rows = frame?.list.lines.length ?? 10
+      dispatch({ type: "move-selection", delta: sign * Math.max(1, Math.floor((rows - 1) / 2)) })
+      return
+    }
+    const rows = state.focus === "todo" ? frame?.todo?.lines.length : frame?.detail.lines.length
+    dispatch({ type: "scroll-transcript", direction, amount: Math.max(1, (rows ?? 10) - 1) })
+  }
+
   renderer.keyInput.on("keypress", (key) => {
     if (key.ctrl && key.name === "c") return shutdown()
     if (key.name === "q") return shutdown()
     if (key.name === "up") return dispatch({ type: "move", delta: -1 })
     if (key.name === "down") return dispatch({ type: "move", delta: 1 })
+    if (key.name === "pageup") return scrollPage("older")
+    if (key.name === "pagedown") return scrollPage("newer")
     if (key.name === "return" || key.name === "enter" || key.name === "right") return dispatch({ type: "open" })
     if (key.name === "o") {
       if (state.focus === "tree" && state.selectedId !== undefined) dispatch({ type: "open-item", id: state.selectedId })
@@ -306,6 +365,7 @@ export async function runViewer(options: ViewerOptions): Promise<void> {
     if (key.name === "3") return dispatch({ type: "toggle-filter", filter: "stopped" })
     if (key.name === "4") return dispatch({ type: "toggle-todo-done" })
     if (key.name === "l") return dispatch({ type: "toggle-todo" })
+    if (key.name === "m") return dispatch({ type: "toggle-terminals" })
     if (key.name === "j") return dispatch({ type: "scroll-transcript", direction: "newer", amount: 1 })
     if (key.name === "k") return dispatch({ type: "scroll-transcript", direction: "older", amount: 1 })
     if (key.name === "g") return dispatch({ type: "follow" })
@@ -350,6 +410,14 @@ export async function runViewer(options: ViewerOptions): Promise<void> {
   }
 
   todoPanel.onMouseDown = () => dispatch({ type: "set-focus", focus: "todo" })
+
+  todoPanel.onMouseScroll = (event) => {
+    const direction = event.scroll?.direction
+    if (direction !== "up" && direction !== "down") return
+    if (state.focus !== "todo") dispatch({ type: "set-focus", focus: "todo" })
+    const step = scrollStep(event)
+    dispatch({ type: "scroll-transcript", direction: direction === "up" ? "older" : "newer", amount: step })
+  }
 
   const timer = setInterval(() => reload(), options.refreshMs)
   reload(true)

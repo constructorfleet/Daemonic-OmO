@@ -1,7 +1,9 @@
 import { describe, expect, test } from "bun:test"
 
-import type { TaskRecord, TaskTreeItem } from "../src/state"
+import type { DagNodeRecord, DagRunRecord } from "../src/dag"
+import { projectTaskTree, type TaskRecord, type TaskTreeItem } from "../src/state"
 import { buildTranscriptDocument, type TranscriptDocument, type TranscriptTurn } from "../src/transcript"
+import type { TerminalSnapshot } from "../src/terminals"
 import {
   RAIL_COLOR,
   RAIL_INACTIVE,
@@ -687,6 +689,212 @@ describe("viewer frame", () => {
     expect(transcriptLine).toBeGreaterThan(-1)
     expect(lines[transcriptLine + 2]).toContain("assistant: turn 10")
     expect(lines[transcriptLine + 3]).toContain("TURN 11 / 30")
+  })
+})
+
+describe("terminal watches", () => {
+  const items = [mainItem(), taskItem("st_a", "alpha")]
+  const transcript = transcriptOf([turn("t1", "one")])
+  const withTerminals = (terminals: TerminalSnapshot): TranscriptDocument => ({
+    ...transcriptOf([turn("t1", "one")]),
+    terminals,
+  })
+  const monitorSnapshot: TerminalSnapshot = {
+    sessionState: "waiting_background",
+    items: [
+      {
+        id: "mon_2",
+        kind: "monitor",
+        state: "passive",
+        description: "PR 127 checks",
+        startedAtMs: 1_000_000,
+        filter: "^PR_CI_",
+        timeoutMs: 3_600_000,
+      },
+      {
+        id: "mon_1",
+        kind: "monitor",
+        state: "open",
+        description: "C6 PR checks settle",
+        startedAtMs: 2_000_000,
+        persistent: true,
+      },
+      {
+        id: "bash_241",
+        kind: "shell",
+        state: "open",
+        description: "tools/check_changed.sh --tests=all",
+        command: "cd /tmp/project && tools/check_changed.sh --tests=all",
+        startedAtMs: 3_000_000,
+      },
+    ],
+  }
+
+  test("#given a session with watches #when projected #then the pane lists ids, states, ages and details", () => {
+    const frame = projectViewer(
+      selectedTask(items),
+      makeData(items, withTerminals(monitorSnapshot)),
+      viewport({ terminalsWidth: 80, terminalsHeight: 12 }),
+      3_600_000 + 3_000_000,
+    )
+    const lines = frame.terminals?.lines ?? []
+    expect(lines[0]).toContain("MONITORS / SHELLS")
+    expect(lines[0]).toContain("3 · 2 open · 1 passive")
+    expect(lines[0]).toContain("waiting_background")
+    expect(lines.some((line) => line.includes("● ◉ monitor  mon_1  open  1h16m  persistent"))).toBe(true)
+    expect(lines.some((line) => line.includes("○ ◉ monitor  mon_2  passive  1h33m  limit 1h00m"))).toBe(true)
+    expect(lines.some((line) => line.includes("● ▣ shell  bash_241  open  1h00m"))).toBe(true)
+    expect(lines.some((line) => line.includes("filter ^PR_CI_"))).toBe(true)
+    expect(lines.some((line) => line.includes("tools/check_changed.sh --tests=all"))).toBe(true)
+  })
+
+  test("#given the pane hidden #when toggled #then it appears and disappears", () => {
+    const data = makeData(items, withTerminals(monitorSnapshot))
+    const hiddenState = updateViewer(selectedTask(items), { type: "toggle-terminals" }, context(items, data.transcript))
+    expect(hiddenState.terminalsVisible).toBe(false)
+    expect(projectViewer(hiddenState, data, viewport()).terminals).toBeUndefined()
+    const shownState = updateViewer(hiddenState, { type: "toggle-terminals" }, context(items, data.transcript))
+    expect(shownState.terminalsVisible).toBe(true)
+    expect(projectViewer(shownState, data, viewport()).terminals).toBeDefined()
+  })
+
+  test("#given no watches #when projected #then the pane says so", () => {
+    const frame = projectViewer(selectedTask(items), makeData(items, transcript), viewport())
+    const lines = frame.terminals?.lines ?? []
+    expect(lines[0]).toContain("MONITORS / SHELLS   none")
+    expect(lines.some((line) => line.includes("No monitors or background shells"))).toBe(true)
+  })
+
+  test("#given a finished session #when projected #then stale watches are labelled", () => {
+    const frame = projectViewer(
+      selectedTask(items),
+      makeData(items, withTerminals({ ...monitorSnapshot, sessionState: "done" })),
+      viewport({ terminalsWidth: 100 }),
+    )
+    expect(frame.terminals?.lines[0]).toContain("session done — may be stale")
+    const watchRow = frame.terminals?.lines.findIndex((line) => line.includes("mon_1")) ?? -1
+    expect(frame.terminals?.styles?.[watchRow]?.dim).toBe(true)
+  })
+
+  test("#given more watches than rows #when projected #then it reports the remainder", () => {
+    const frame = projectViewer(
+      selectedTask(items),
+      makeData(items, withTerminals(monitorSnapshot)),
+      viewport({ terminalsHeight: 5 }),
+    )
+    expect(frame.terminals?.lines.some((line) => line.includes("more   (m hides this pane)"))).toBe(true)
+  })
+})
+
+describe("DAG run rows", () => {
+  const now = Date.parse("2026-11-25T08:00:58.000Z")
+  const node = (overrides: Partial<DagNodeRecord> = {}): DagNodeRecord => ({
+    id: "impl-5",
+    label: "Todo 5 omo contract spike",
+    state: "running",
+    route: { kind: "category", category: "deep-high" },
+    dependsOn: [],
+    createdAt: "2026-11-25T08:00:45.000Z",
+    startedAt: "2026-11-25T08:00:45.000Z",
+    ...overrides,
+  })
+  const dagRun = (overrides: Partial<DagRunRecord> = {}): DagRunRecord => ({
+    runId: "dag_1",
+    name: "Omo-daemonic Wave 2: Todos 5, 7, 8",
+    status: "running",
+    rootSessionId: "main-1",
+    createdAt: "2026-11-25T08:00:45.144Z",
+    nodes: [],
+    waves: [],
+    ...overrides,
+  })
+  const dagItems = (): readonly TaskTreeItem[] =>
+    projectTaskTree(
+      [
+        record({ task_id: "st_impl", name: "impl-5", status: "running", started_at: "2026-11-25T08:00:45.000Z", terminal_at: undefined }),
+        record({ task_id: "st_done", name: "done", status: "completed" }),
+      ],
+      {
+        runs: [
+          dagRun({
+            nodes: [
+              node({ taskId: "st_impl" }),
+              node({ id: "verify-5", label: "Verify Todo 5", state: "pending", route: { kind: "category", category: "deep-low" }, startedAt: undefined }),
+              node({ id: "finished", label: "Finished node", state: "completed", taskId: "st_done" }),
+            ],
+            waves: [
+              { index: 0, nodeIds: ["impl-5", "verify-5"] },
+              { index: 1, nodeIds: ["finished"] },
+            ],
+          }),
+        ],
+        activity: new Map([["st_impl", "I read this as a change ask"]]),
+      },
+    )
+
+  test("#given an expanded main #when projected #then the run header and node rows nest under it", () => {
+    const items = dagItems()
+    const transcript = transcriptOf([])
+    const state = updateViewer(initialViewerState(items), { type: "open" }, context(items, transcript))
+    const frame = projectViewer(
+      state,
+      makeData(items, transcript),
+      viewport({ listWidth: 100, listHeight: 24 }),
+      now,
+    )
+    expect(frame.list.lines.some((line) => line.includes("▶ Omo-daemonic Wave 2: Todos 5,... running wave 1/2 1/3 done, 1 running"))).toBe(true)
+    expect(
+      frame.list.lines.some((line) =>
+        line.includes("▶ Todo 5 omo contract spike · category:deep-high · I read this as a change ask · 13s"),
+      ),
+    ).toBe(true)
+    expect(
+      frame.list.lines.some((line) => line.includes("◌ Verify Todo 5 · category:deep-low · waiting 13s")),
+    ).toBe(true)
+    expect(frame.list.lines.some((line) => line.includes("✓ Finished node · category:deep-high · 13s"))).toBe(true)
+  })
+
+  test("#given a run row selected #when enter or a click opens it #then the viewed transcript does not change", () => {
+    const items = dagItems()
+    const transcript = transcriptOf([turn("t1", "one")])
+    const runId = items.find((item) => item.kind === "run")!.id
+    expect(runId).toBe("run:dag_1")
+    let state: ViewerState = {
+      ...updateViewer(initialViewerState(items), { type: "open" }, context(items, transcript)),
+      selectedId: runId,
+    }
+    const entered = updateViewer(state, { type: "open" }, context(items, transcript))
+    expect(entered.viewId).toBe("main:main-1")
+    expect(entered.focus).toBe("tree")
+    const clicked = updateViewer(state, { type: "open-item", id: runId }, context(items, transcript))
+    expect(clicked.selectedId).toBe(runId)
+    expect(clicked.viewId).toBe("main:main-1")
+    expect(clicked.focus).toBe("tree")
+    state = clicked
+    expect(updateViewer(state, { type: "move", delta: 1 }, context(items, transcript)).selectedId).toBe("st_impl")
+  })
+
+  test("#given a hidden completed filter #when the tree renders #then the run header stays and completed nodes go", () => {
+    const items = dagItems()
+    const transcript = transcriptOf([])
+    let state = updateViewer(initialViewerState(items), { type: "open" }, context(items, transcript))
+    state = updateViewer(state, { type: "toggle-filter", filter: "completed" }, context(items, transcript))
+    const frame = projectViewer(state, makeData(items, transcript), viewport({ listWidth: 100, listHeight: 24 }), now)
+    expect(frame.list.lines.some((line) => line.includes("▶ Omo-daemonic Wave 2"))).toBe(true)
+    expect(frame.list.lines.some((line) => line.includes("Todo 5 omo contract spike"))).toBe(true)
+    expect(frame.list.lines.some((line) => line.includes("Finished node"))).toBe(false)
+    expect(frame.list.lines.slice(0, 2).join(" ")).toContain("–completed")
+  })
+
+  test("#given a selected node #when projected #then its detail names the node, route and activity", () => {
+    const items = dagItems()
+    const state = selectedTask(items, "st_impl")
+    const frame = projectViewer(state, makeData(items, transcriptOf([])), viewport(), now)
+    expect(frame.detail.lines[0]).toBe("NODE  Todo 5 omo contract spike")
+    expect(frame.detail.lines).toContain("State     running")
+    expect(frame.detail.lines).toContain("Route     category:deep-high")
+    expect(frame.detail.lines).toContain("Activity  I read this as a change ask")
+    expect(frame.detail.lines).toContain("Elapsed   13s")
   })
 })
 
