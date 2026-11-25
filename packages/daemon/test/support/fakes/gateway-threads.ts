@@ -26,6 +26,8 @@ export interface FakeThreadRecord {
   readonly surface: string | null
   model: string | null
   visible: boolean
+  /** Held `unattended` after a host restart: only `releaseHold` starts a turn. */
+  held: boolean
   readonly sentKeys: Set<string>
 }
 
@@ -46,6 +48,7 @@ export class FakeThreadStore {
       surface: "seeded",
       model: null,
       visible: true,
+      held: false,
       sentKeys: new Set(),
     })
     return thread
@@ -63,6 +66,7 @@ export class FakeThreadStore {
       surface: "created",
       model: input.model,
       visible: input.visible,
+      held: false,
       sentKeys: new Set(),
     }
     this.threads.set(thread, record)

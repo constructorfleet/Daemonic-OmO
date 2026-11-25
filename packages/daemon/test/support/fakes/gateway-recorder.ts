@@ -9,6 +9,7 @@ import type {
   SendArgs,
   SetModelArgs,
 } from "../../../src/core/ports"
+import type { ThreadId } from "../../../src/core/types"
 
 export const GATEWAY_FAILPOINTS = [
   "afterDecideCommit",
@@ -37,6 +38,8 @@ export type GatewayCall =
   | { readonly method: "setModel"; readonly args: SetModelArgs }
   | { readonly method: "bindCompletion"; readonly args: BindCompletionArgs }
   | { readonly method: "ensureHost"; readonly args: EnsureHostArgs }
+  | { readonly method: "sessionState"; readonly args: { readonly thread: ThreadId } }
+  | { readonly method: "releaseHold"; readonly args: { readonly thread: ThreadId; readonly text: string } }
   | { readonly method: "probe"; readonly args: null }
 
 export class GatewayRecorder {
@@ -68,5 +71,9 @@ export class GatewayRecorder {
 
   get ensureHostCalls(): readonly EnsureHostArgs[] {
     return this.entries.flatMap((call) => (call.method === "ensureHost" ? [call.args] : []))
+  }
+
+  get releaseHoldCalls(): readonly { readonly thread: ThreadId; readonly text: string }[] {
+    return this.entries.flatMap((call) => (call.method === "releaseHold" ? [call.args] : []))
   }
 }

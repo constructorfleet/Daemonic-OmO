@@ -1,6 +1,5 @@
 import type {
   Ms,
-  PermissionPreset,
   SessionId,
   ThinkingLevel,
   ThreadId,
@@ -141,7 +140,6 @@ export interface CreateThreadArgs {
   readonly cwd: string
   readonly model?: string
   readonly reasoning?: ThinkingLevel
-  readonly permissionPreset?: PermissionPreset
   readonly prompt?: string
   readonly idempotencyKey: string
 }
@@ -218,6 +216,27 @@ export interface CompletionOutcome {
   readonly detail: string | null
 }
 
+/** Pushed once per armed binding when omo's outbox records its completion row. */
+export interface CompletionEvent {
+  readonly bindingId: string
+  readonly thread: ThreadId
+  readonly outcome: CompletionOutcome
+}
+
+/** `omo host session state <thread> --json`, reduced to what recovery needs. */
+export interface HostSessionState {
+  readonly thread: ThreadId
+  /** True when the engine holds the session `unattended` (an SDK send runs no turn). */
+  readonly held: boolean
+  readonly paused: boolean
+  readonly holds: readonly string[]
+  readonly lifecycle: string | null
+}
+
+export interface ReleaseHoldOutcome {
+  readonly disposition: string
+}
+
 export interface EnsureHostArgs {
   readonly agentDir: string
 }
@@ -240,6 +259,16 @@ export const GATEWAY_ERROR_CODES = [
   "caller_context_missing",
   "host_unavailable",
   "sdk_unavailable",
+  "not_found",
+  "scope_denied",
+  "unsupported",
+  "turn_conflict",
+  "loop_detected",
+  /** The thread SDK cannot load: every method answers this and no CLI fallback runs. */
+  "gateway_degraded",
+  /** The bridge child exited while the request was in flight. */
+  "bridge_restarted",
+  "bridge_timeout",
   "internal",
 ] as const
 export type GatewayErrorCode = (typeof GATEWAY_ERROR_CODES)[number]
@@ -271,5 +300,9 @@ export interface Gateway {
     args: BindCompletionArgs,
   ): Promise<GatewayResult<CompletionBinding>>
   ensureHost(args: EnsureHostArgs): Promise<GatewayResult<EnsureHostOutcome>>
+  sessionState(thread: ThreadId): Promise<GatewayResult<HostSessionState>>
+  /** Engine input through `omo host session prompt`: the only way to release an `unattended` hold. */
+  releaseHold(thread: ThreadId, text: string): Promise<GatewayResult<ReleaseHoldOutcome>>
+  onCompletion(listener: (event: CompletionEvent) => void): () => void
   probe(): Promise<GatewayProbe>
 }

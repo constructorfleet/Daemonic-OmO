@@ -1,0 +1,35 @@
+#!/bin/bash
+# Stand-in for the `omo` binary. It only ever runs inside a test's temp agent dir: it refuses to run when
+# OMO_CODING_AGENT_DIR is unset, so a mistake can never write under the real HOME.
+set -u
+dir="${OMO_CODING_AGENT_DIR:?stub-omo needs OMO_CODING_AGENT_DIR}"
+printf '%s\n' "$*" >> "$dir/stub-omo-calls.log"
+env > "$dir/stub-omo-env.txt"
+
+case "$*" in
+  "--version")
+    if [ -f "$dir/stub-omo-version" ]; then cat "$dir/stub-omo-version"; else echo "omo 5.1.79 (engine: senpi stub)"; fi
+    ;;
+  "daemon run --json --pinned")
+    if [ -f "$dir/stub-daemon-fail" ]; then echo "daemon: run failed" >&2; exit 1; fi
+    action=start
+    if [ -f "$dir/host-up" ]; then action=reuse; fi
+    touch "$dir/host-up"
+    printf '{"action":"%s","socket":"%s/rpc/rpc.sock","pid":4242,"lifecycle":"ready","instanceId":"stub","generation":0}\n' "$action" "$dir"
+    ;;
+  "host session state "*" --json")
+    if [ ! -f "$dir/host-up" ]; then echo '{"kind":"error","error":{"code":"host_unavailable","message":"no host"}}'; exit 3; fi
+    cat "$dir/stub-session-state.json"
+    ;;
+  "host session prompt "*)
+    if [ ! -f "$dir/host-up" ]; then echo '{"kind":"error","error":{"code":"host_unavailable","message":"no host"}}'; exit 3; fi
+    echo '{"action":"prompt","sessionId":"rpc-2","disposition":"started"}'
+    ;;
+  "schedule list --json")
+    if [ -f "$dir/stub-schedule.json" ]; then cat "$dir/stub-schedule.json"; else echo '{"jobs":[],"invalid":[],"runners":[]}'; fi
+    ;;
+  *)
+    echo "stub-omo: unexpected arguments: $*" >&2
+    exit 2
+    ;;
+esac

@@ -3,6 +3,7 @@ import {
   type CloseArgs,
   type CloseOutcome,
   type CompletionBinding,
+  type CompletionEvent,
   type CompletionOutcome,
   type CreateOutcome,
   type CreateThreadArgs,
@@ -15,9 +16,11 @@ import {
   type GatewayProbe,
   type GatewayRefusal,
   type GatewayResult,
+  type HostSessionState,
   type InterruptArgs,
   type ListArgs,
   type ReadArgs,
+  type ReleaseHoldOutcome,
   type SendArgs,
   type SendOutcome,
   type SetModelArgs,
@@ -46,6 +49,8 @@ export class FakeGateway implements Gateway {
   private readonly recorder = new GatewayRecorder()
   private readonly pendingFailpoints: GatewayFailpoint[]
   private readonly completions = new Map<string, CompletionOutcome>()
+  private readonly bindings = new Map<ThreadId, string>()
+  private readonly completionListeners = new Set<(event: CompletionEvent) => void>()
   private sdkLoad: "ok" | "fail"
   private presets: readonly string[]
   private bindingSeq = 0
@@ -80,6 +85,14 @@ export class FakeGateway implements Gateway {
     return this.recorder.ensureHostCalls
   }
 
+  get releaseHoldCalls(): readonly { readonly thread: ThreadId; readonly text: string }[] {
+    return this.recorder.releaseHoldCalls
+  }
+
+  setSessionHeld(thread: ThreadId, held: boolean): void {
+    this.store.require(thread).held = held
+  }
+
   setSdkLoad(value: "ok" | "fail"): void {
     this.sdkLoad = value
   }
@@ -104,9 +117,13 @@ export class FakeGateway implements Gateway {
     this.store.require(thread).controls = [...controls]
   }
 
+  /** Records the outcome and, when the thread has an armed binding, pushes it to `onCompletion` listeners. */
   setCompletionOutcome(thread: ThreadId, outcome: CompletionOutcome): void {
     this.store.require(thread)
     this.completions.set(thread, outcome)
+    const bindingId = this.bindings.get(thread)
+    if (bindingId === undefined) return
+    for (const listener of this.completionListeners) listener({ bindingId, thread, outcome })
   }
 
   getCompletionOutcome(thread: ThreadId): CompletionOutcome | null {
@@ -208,6 +225,7 @@ export class FakeGateway implements Gateway {
       return refusal("not_resumable", `fake gateway: no thread ${args.thread}`)
     }
     this.bindingSeq += 1
+    this.bindings.set(args.thread, `binding-${this.bindingSeq}`)
     return ok({
       bindingId: `binding-${this.bindingSeq}`,
       thread: args.thread,
@@ -221,6 +239,28 @@ export class FakeGateway implements Gateway {
       return refusal("host_unavailable", "fake gateway: host cannot be ensured")
     }
     return ok({ started: true, pid: 4242 })
+  }
+
+  async sessionState(thread: ThreadId): Promise<GatewayResult<HostSessionState>> {
+    this.recorder.record({ method: "sessionState", args: { thread } })
+    const record = this.store.find(thread)
+    if (record === undefined) return refusal("not_found", `fake gateway: no thread ${thread}`)
+    const holds = record.held ? ["unattended"] : []
+    return ok({ thread, held: record.held, paused: record.held, holds, lifecycle: record.held ? "held" : record.state })
+  }
+
+  async releaseHold(thread: ThreadId, text: string): Promise<GatewayResult<ReleaseHoldOutcome>> {
+    this.recorder.record({ method: "releaseHold", args: { thread, text } })
+    const record = this.store.find(thread)
+    if (record === undefined) return refusal("not_found", `fake gateway: no thread ${thread}`)
+    record.held = false
+    record.state = "running"
+    return ok({ disposition: "started" })
+  }
+
+  onCompletion(listener: (event: CompletionEvent) => void): () => void {
+    this.completionListeners.add(listener)
+    return () => this.completionListeners.delete(listener)
   }
 
   async probe(): Promise<GatewayProbe> {

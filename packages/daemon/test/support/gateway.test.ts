@@ -11,7 +11,6 @@ const CREATE: CreateThreadArgs = {
   cwd: "/work/project",
   model: "gpt-5",
   reasoning: "high",
-  permissionPreset: "workspace",
   idempotencyKey: "fire-1:1",
 }
 
@@ -40,7 +39,6 @@ describe("FakeGateway", () => {
 
     expect(created).toEqual({ thread: THREAD_1, sessionId: SESSION_1, created: true })
     expect(gateway.createCalls[0]?.cwd).toBe("/work/project")
-    expect(gateway.createCalls[0]?.permissionPreset).toBe("workspace")
     const listed = await ok(gateway.list())
     const expected: readonly ThreadSnapshot[] = [
       {
@@ -154,6 +152,29 @@ describe("FakeGateway", () => {
     expect(binding).toEqual({ bindingId: "binding-1", thread, events: ["completion"] })
     expect(gateway.bindCompletionCalls[0]?.events).toEqual(["completion"])
     expect(gateway.getCompletionOutcome(thread)).toEqual({ status: "completed", detail: "done" })
+  })
+
+  test("an armed binding pushes its outcome to onCompletion listeners", async () => {
+    const gateway = new FakeGateway()
+    const thread = gateway.seedThread()
+    const pushed: unknown[] = []
+    gateway.onCompletion((event) => pushed.push(event))
+
+    const binding = await ok(gateway.bindCompletion({ thread, events: ["completion"] }))
+    gateway.setCompletionOutcome(thread, { status: "failed", detail: "turn_error" })
+
+    expect(pushed).toEqual([{ bindingId: binding.bindingId, thread, outcome: { status: "failed", detail: "turn_error" } }])
+  })
+
+  test("a held session reports the unattended hold until releaseHold delivers engine input", async () => {
+    const gateway = new FakeGateway()
+    const thread = gateway.seedThread()
+    gateway.setSessionHeld(thread, true)
+
+    expect(await ok(gateway.sessionState(thread))).toEqual({ thread, held: true, paused: true, holds: ["unattended"], lifecycle: "held" })
+    expect(await ok(gateway.releaseHold(thread, "Resume the interrupted task."))).toEqual({ disposition: "started" })
+    expect((await ok(gateway.sessionState(thread))).held).toBe(false)
+    expect(gateway.releaseHoldCalls).toEqual([{ thread, text: "Resume the interrupted task." }])
   })
 
   test("close marks a thread inactive and removes it from list", async () => {
