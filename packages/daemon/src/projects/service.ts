@@ -38,6 +38,8 @@ export interface ProjectsServiceDeps {
   readonly rng: Rng
   readonly config: Config
   readonly git: Git
+  /** Cancels the project's unfinished runs for `archive?force=true`; throws state_conflict if one cannot be stopped. */
+  cancelRuns(actor: User, project: Project): Promise<void>
 }
 
 export const PROJECTS = new ServiceKey<ProjectsService>("projects")
@@ -244,15 +246,12 @@ export function createProjectsService(deps: ProjectsServiceDeps): ProjectsServic
     },
 
     async archive(actor, rawId, force) {
-      if (force) {
-        throw new ApiError("invalid_arguments", "archive force is unavailable until the run engine can cancel runs", {
-          force: true,
-        })
+      const visible = requireVisible(actor, rawId)
+      if (visible.state === "archived") {
+        throw new ApiError("state_conflict", "project is already archived", { projectId: visible.id })
       }
+      if (force) await deps.cancelRuns(actor, visible)
       const project = requireVisible(actor, rawId)
-      if (project.state === "archived") {
-        throw new ApiError("state_conflict", "project is already archived", { projectId: project.id })
-      }
       requireIdle(project)
       const next: Project = {
         ...project,

@@ -277,7 +277,7 @@ describe("projects api", () => {
     expect(itemsOf(adminList).map((item) => field(item, "name")).sort()).toEqual(["admin-project", "alice-project"])
   })
 
-  test("archive is a 409 while a nonterminal run exists and succeeds once the run is closed", async () => {
+  test("archive is a 409 while a nonterminal run exists, and force=true cancels the run and archives", async () => {
     const root = await tempRoot()
     const target = await server()
     const alice = await member(target, "alice")
@@ -310,16 +310,14 @@ describe("projects api", () => {
     const blocked = await memberCall(target, alice, "POST", path)
     const blockedBody = await errorBody(blocked)
     const forced = await memberCall(target, alice, "POST", `${path}?force=true`)
-    target.app.ctx.repos.runs.update({ ...run, state: "closed", revision: 2, updatedAt: at }, 1)
-    const archived = await memberCall(target, alice, "POST", path)
-    const archivedBody: unknown = await archived.json()
+    const forcedBody: unknown = await forced.json()
     const again = await memberCall(target, alice, "POST", path)
 
     expect([blocked.status, blockedBody.code]).toEqual([409, "state_conflict"])
     expect(blockedBody.details).toEqual({ nonterminalRuns: 1 })
-    expect([forced.status, (await errorBody(forced)).code]).toEqual([400, "invalid_arguments"])
-    expect(archived.status).toBe(200)
-    expect(field(archivedBody, "state")).toBe("archived")
+    expect(forced.status).toBe(200)
+    expect(field(forcedBody, "state")).toBe("archived")
+    expect(target.app.ctx.repos.runs.get(runId)?.outcome).toEqual({ kind: "cancelled" })
     expect([again.status, (await errorBody(again)).code]).toEqual([409, "state_conflict"])
   })
 

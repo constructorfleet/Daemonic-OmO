@@ -56,14 +56,12 @@ export const THINKING_LEVELS = [
 ] as const
 export type ThinkingLevel = (typeof THINKING_LEVELS)[number]
 
-export const PERMISSION_PRESETS = [
-  "full-access",
-  "workspace",
-  "accept-edits",
-  "auto",
-  "read-only",
-] as const
-export type PermissionPreset = (typeof PERMISSION_PRESETS)[number]
+/**
+ * Spawns pass no `permission_preset` (decision gate resolved 2026-11-25): every session runs in its agent
+ * dir's default permission mode, and runs and audit rows record that.
+ */
+export const PERMISSION_MODE = "agent-dir-default"
+export type PermissionMode = typeof PERMISSION_MODE
 
 export interface UserSettings {
   readonly maxRunning?: number
@@ -118,7 +116,6 @@ export interface RunSpec {
   readonly prompt: string
   readonly model?: string
   readonly thinking?: ThinkingLevel
-  readonly permissionPreset?: PermissionPreset
   readonly extraArgs?: readonly string[]
   readonly timeoutMs: number
   readonly nameTemplate?: string
@@ -247,7 +244,6 @@ export const RUN_FAILURE_REASONS = [
   "turn_error",
   "host_unavailable",
   "gateway_degraded",
-  "preset_unconfirmed",
 ] as const
 export type RunFailureReason = (typeof RUN_FAILURE_REASONS)[number]
 
@@ -304,6 +300,10 @@ export interface Run {
   readonly cancelRequested: boolean
   readonly cancelReason?: CancelReason
   readonly orphanChildren: readonly OrphanChild[]
+  /** Set on every run the engine decides; absent only on rows written before the run engine existed. */
+  readonly permissionMode?: PermissionMode
+  /** The gateway's refusal (code and message) behind a `failed` outcome. */
+  readonly errorDetail?: string
   readonly createdAt: Iso
   readonly updatedAt: Iso
   readonly activeAt?: Iso
