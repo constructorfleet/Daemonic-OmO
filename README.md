@@ -34,7 +34,8 @@ The viewer discovers the configured OmO Native agent directory and falls back to
 ## Keys
 
 - `↑` / `↓`: select a main session or task; with the turn list focused, step between turns; with the todo pane focused, scroll it
-- `Enter` / `→`: open the selected session or task and focus its turn list with the newest turn selected; with the turn list focused, open the selected turn's detail inline
+- `Enter` / `→`: expand or collapse the selected main session in the tree; on an agent row, open its turn list with the newest turn selected; with the turn list focused, open the selected turn's detail inline
+- `o`: open the selected main session or agent transcript without changing tree expansion
 - `←`: back one level (close the turn detail, then return focus to the task list)
 - `Esc`: close the expanded turn, then return to the main session
 - `Tab`: move focus between the task list, the transcript, and the todo pane
@@ -51,6 +52,8 @@ The viewer discovers the configured OmO Native agent directory and falls back to
 An expanded turn is drawn inside the transcript, right after its own lines, and the view recenters on it as you step from turn to turn; `j` / `k` scroll the same transcript. Expanding a turn never hides the conversation around it. The turn list cursor marks the selected turn with a left rail and a tinted row background even before its detail is open, and the footer names the open turn as `TURN 3 / 12`, so the pointer stays visible even after scrolling away. The rail is blue in the pane you are driving; the other pane keeps its selection with a gray rail, and the focused pane's border turns blue.
 
 When the agent uses the todo tool, a todo pane sits under the task list at the same width: `TODO 4/15` with the `Now` and `Next` lines, then every phase with its progress and items (`✓` done, `●` in progress, `○` pending). The pane comes from the last todo tool result in the loaded session window and sizes itself to the list up to about a third of the screen; when the list is longer, completed items drop first and the pane scrolls with `↑` / `↓` (or `j` / `k`) once `Tab` focuses it, showing its row range at the bottom. `4` hides completed items, and `l` hides or shows the pane.
+
+Main sessions start collapsed behind `▸`; `Enter` opens one (`▾`) and reveals its agent rows with tree branches, and each main expands independently. A collapsed main is a single row, so a store with dozens of agents stays navigable; the list window follows the cursor with `↑ more above` / `↓ more below`, and selecting an agent keeps its main expanded. `o` opens the selected main session's transcript, which `Enter` cannot do while it is toggling expansion.
 
 Transcript rows are colored by kind: assistant text blue, thinking gray and dim, tool calls amber, results green, errors red. The tree colors each task by status (running amber, done green, failed/lost red); the selected task gets a bright left rail and a tinted pair of rows, matching the turn cursor. Filters are shown after the tree title (for example `–completed`) and filtered tasks never swallow the selected or viewed task, which stays visible.
 

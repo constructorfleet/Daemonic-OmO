@@ -100,7 +100,7 @@ export async function runViewer(options: ViewerOptions): Promise<void> {
     height: "100%",
   })
   const footer = new TextRenderable(renderer, {
-    content: "↑/↓ select  enter/→ turns  esc main  t newest turn  l todo  j/k scroll  g latest  p pause  r refresh  q quit",
+    content: "↑/↓ select  enter/→ expand  o open  esc main  t newest turn  l todo  j/k scroll  g latest  p pause  r refresh  q quit",
     fg: "#7c8aa5",
   })
   const todoPanel = new BoxRenderable(renderer, {
@@ -293,6 +293,10 @@ export async function runViewer(options: ViewerOptions): Promise<void> {
     if (key.name === "up") return dispatch({ type: "move", delta: -1 })
     if (key.name === "down") return dispatch({ type: "move", delta: 1 })
     if (key.name === "return" || key.name === "enter" || key.name === "right") return dispatch({ type: "open" })
+    if (key.name === "o") {
+      if (state.focus === "tree" && state.selectedId !== undefined) dispatch({ type: "open-item", id: state.selectedId })
+      return
+    }
     if (key.name === "left") return dispatch({ type: "exit-level" })
     if (key.name === "escape") return dispatch({ type: "back" })
     if (key.name === "t") return dispatch({ type: "toggle-turn" })

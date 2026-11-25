@@ -22,7 +22,7 @@ Options:
   -- <args...>        Pass remaining arguments to omo when using --wrap
   -h, --help          Show this help
 
-Keys: ↑/↓ select or scroll, Enter/→ open, ← back, Tab panes, 1/2/3 filters, 4 todo done, t newest turn, l todo, j/k scroll, g latest, p pause, r refresh, q quit
+Keys: ↑/↓ select or scroll, Enter/→ expand main or open agent, o open, ← back, Tab panes, 1/2/3 filters, 4 todo done, t newest turn, l todo, j/k scroll, g latest, p pause, r refresh, q quit
 Mouse: wheel scrolls the focused pane; click a task or transcript line to open it
 `
 

@@ -35,6 +35,8 @@ export interface ViewerState extends NavigationState {
   readonly todoHideCompleted: boolean
   readonly todoScroll: number
   readonly hiddenFilters: readonly TaskFilter[]
+  /** Main-session roots whose subagent tasks are expanded in the tree. */
+  readonly expandedRoots: readonly string[]
   readonly paused: boolean
 }
 
@@ -148,6 +150,7 @@ export function initialViewerState(items: readonly TaskTreeItem[]): ViewerState 
     todoHideCompleted: false,
     todoScroll: 0,
     hiddenFilters: [],
+    expandedRoots: [],
     paused: false,
   }
 }
@@ -163,11 +166,13 @@ export function updateViewer(state: ViewerState, input: ViewerInput, context: Vi
         : moveSelection(state, input.delta, list)
     case "move-selection":
       return moveSelection(state, input.delta, list)
-    case "open":
+    case "open": {
       if (state.focus === "todo") return state
-      return state.focus === "transcript"
-        ? toggleSelectedTurn(state, turns)
-        : enterTranscript(openSelection(state, context.items))
+      if (state.focus === "transcript") return toggleSelectedTurn(state, turns)
+      const selected = context.items.find((item) => item.id === state.selectedId)
+      if (selected?.kind === "main") return toggleExpandedRoot(state, selected.rootSessionId)
+      return enterTranscript(openSelection(state, context.items))
+    }
     case "open-item": {
       if (!context.items.some((item) => item.id === input.id)) return state
       return enterTranscript(openSelection({ ...state, selectedId: input.id }, context.items))
@@ -247,6 +252,13 @@ function enterTranscript<S extends ViewerState>(state: S): S {
   return { ...state, focus: "transcript", selectedTurnId: undefined, expandedTurnId: undefined }
 }
 
+function toggleExpandedRoot<S extends ViewerState>(state: S, rootSessionId: string): S {
+  const expandedRoots = state.expandedRoots.includes(rootSessionId)
+    ? state.expandedRoots.filter((root) => root !== rootSessionId)
+    : [...state.expandedRoots, rootSessionId]
+  return { ...state, expandedRoots, scrollOffset: 0 }
+}
+
 function nextFocus(state: ViewerState, transcript: TranscriptDocument): ViewerFocus {
   const hasTurns = transcript.turns.length > 0
   const hasTodo = transcript.todo !== undefined && state.todoVisible
@@ -270,26 +282,20 @@ function filterGroup(status: string): TaskFilter | undefined {
   return undefined
 }
 
-/** Items shown in the tree: filtered groups disappear, but the selected and viewed items stay reachable. */
+/** Items shown in the tree: collapsed main rows hide their subagents, and filtered groups disappear. */
 export function visibleTaskItems(state: ViewerState, items: readonly TaskTreeItem[]): readonly TaskTreeItem[] {
-  if (state.hiddenFilters.length === 0) return items
+  const expanded = new Set(state.expandedRoots)
+  const selected = items.find((item) => item.id === state.selectedId)
+  if (selected?.kind === "task") expanded.add(selected.rootSessionId)
   const hidden = new Set(state.hiddenFilters)
-  const kept = new Set<string>()
-  for (const item of items) {
-    if (item.kind !== "task") continue
-    const pinned = item.id === state.selectedId || item.id === state.viewId
+  return items.filter((item) => {
+    if (item.kind === "main") return true
+    if (!expanded.has(item.rootSessionId)) return false
+    if (hidden.size === 0) return true
+    if (item.id === state.selectedId || item.id === state.viewId) return true
     const group = filterGroup(item.task?.status ?? "")
-    if (pinned || group === undefined || !hidden.has(group)) kept.add(item.id)
-  }
-  const roots = new Set<string>()
-  for (const item of items) {
-    if (item.kind === "task") {
-      if (kept.has(item.id)) roots.add(item.rootSessionId)
-    } else if (item.id === state.selectedId || item.id === state.viewId) {
-      roots.add(item.rootSessionId)
-    }
-  }
-  return items.filter((item) => (item.kind === "main" ? roots.has(item.rootSessionId) : kept.has(item.id)))
+    return group === undefined || !hidden.has(group)
+  })
 }
 
 function exitToMain(state: ViewerState, items: readonly TaskTreeItem[]): ViewerState {
@@ -326,8 +332,10 @@ export function reconcileViewer(
   items: readonly TaskTreeItem[],
   transcript?: TranscriptDocument,
 ): ViewerState {
-  const { focus, selectedTurnId, expandedTurnId, ...rest } = state
+  const { focus, selectedTurnId, expandedTurnId, expandedRoots, ...rest } = state
   const navigation = reconcileNavigation(rest, items)
+  const roots = new Set(items.filter((item) => item.kind === "main").map((item) => item.rootSessionId))
+  const keptRoots = expandedRoots.filter((root) => roots.has(root))
   const viewed = viewedItem(navigation, items)
   const viewChanged = navigation.viewId !== state.viewId
   const known = (id: string | undefined): id is string =>
@@ -346,6 +354,7 @@ export function reconcileViewer(
   return {
     ...navigation,
     focus: nextFocus,
+    expandedRoots: keptRoots,
     ...(selected === undefined ? {} : { selectedTurnId: selected }),
     ...(expanded === undefined ? {} : { expandedTurnId: expanded }),
     scrollOffset: Math.max(0, navigation.scrollOffset),
@@ -374,6 +383,7 @@ export function projectViewer(
   now = Date.now(),
 ): ViewerFrame {
   const selected = data.items.find((item) => item.id === state.selectedId)
+  const selectedRootExpanded = selected?.kind === "main" && state.expandedRoots.includes(selected.rootSessionId)
   const viewed = viewedItem(state, data.items)
   const expanded = state.expandedTurnId !== undefined
     && data.transcript.turns.some((turn) => turn.id === state.expandedTurnId)
@@ -385,15 +395,18 @@ export function projectViewer(
   const todo = data.transcript.todo
   const todoHint = todo === undefined ? "" : (state.todoVisible ? "l hide todo  " : "l todo  ")
   const tabTarget = todo !== undefined && state.todoVisible ? "todo" : "tree"
+  const treeAction = selected?.kind === "main"
+    ? `enter/→ ${selectedRootExpanded ? "collapse" : "expand"}   o open`
+    : hasTurns
+      ? "enter/→ turns"
+      : "enter follow"
   const footer = expanded
     ? `TURN ${expandedIndex + 1}/${data.transcript.turns.length}   ↑/↓ turn   enter/← close   j/k scroll   ${todoHint}p pause   r refresh   q quit`
     : state.focus === "todo" && todo !== undefined
       ? `TODO ${todo.done}/${todo.total}   ↑/↓ scroll   ${state.todoHideCompleted ? "4 show done" : "4 hide done"}   ← back   tab next   l hide   p pause   q quit`
       : state.focus === "transcript" && hasTurns
         ? `↑/↓ turn   enter expand   ← back   tab ${tabTarget}   t newest   1/2/3 filter   ${todoHint}p pause   q quit`
-        : hasTurns
-          ? `↑/↓ select   enter/→ turns   1/2/3 filter   tab ${tabTarget}   ${todoHint}esc main   p pause   r refresh   q quit`
-          : `↑/↓ select   enter follow   1/2/3 filter   tab ${tabTarget}   ${todoHint}esc main   p pause   r refresh   q quit`
+        : `↑/↓ select   ${treeAction}   1/2/3 filter   tab ${tabTarget}   ${todoHint}esc main   p pause   r refresh   q quit`
   const list = projectList(
     visibleTaskItems(state, data.items),
     state.selectedId,
@@ -402,6 +415,7 @@ export function projectViewer(
     now,
     listRail,
     state.hiddenFilters,
+    state.expandedRoots,
   )
   const detail = projectDetail(state, data, selected, viewed, viewport, now, turnRail)
   const todoPane = state.todoVisible && todo !== undefined
@@ -432,6 +446,7 @@ function projectList(
   now: number,
   railColor: string,
   hiddenFilters: readonly TaskFilter[],
+  expandedRoots: readonly string[],
 ): PaneFrame {
   const maxWidth = Math.max(1, Math.floor(width))
   const maxHeight = Math.max(1, Math.floor(height))
@@ -450,7 +465,7 @@ function projectList(
   for (const item of items) {
     const hit: ViewerHit = { kind: "item", id: item.id }
     const selected = item.id === selectedId
-    const logical = describeItem(item, selected, now)
+    const logical = describeItem(item, selected, now, expandedRoots)
     const rows = logical.flatMap((line) =>
       wrapText(line.text, maxWidth).map((text, index) =>
         selected && index === 0 ? markSelectedTaskRow(text, line.style, railColor) : { text, style: line.style },
@@ -530,13 +545,19 @@ function statusColor(status: string): string {
   return STYLE.thinking
 }
 
-function describeItem(item: TaskTreeItem, selected: boolean, now: number): readonly StyledLine[] {
+function describeItem(
+  item: TaskTreeItem,
+  selected: boolean,
+  now: number,
+  expandedRoots: readonly string[],
+): readonly StyledLine[] {
   const prefix = selected ? "› " : "  "
   const selection: RowStyle | undefined = selected ? { bg: STYLE.selectedBg, bold: true } : undefined
   if (item.kind === "main") {
+    const expanded = expandedRoots.includes(item.rootSessionId)
     return [
       {
-        text: `${prefix}◆ Main session  ${item.rootSessionId.slice(0, 12)}`,
+        text: `${prefix}${expanded ? "▾" : "▸"} ◆ Main session  ${item.rootSessionId.slice(0, 12)}`,
         style: { fg: STYLE.accent, ...selection },
       },
     ]
@@ -544,14 +565,16 @@ function describeItem(item: TaskTreeItem, selected: boolean, now: number): reado
   const task = item.task
   if (task === undefined) return []
   const indent = "  ".repeat(Math.max(0, item.depth - 1))
+  const branch = item.lastSibling === false ? "├─" : "└─"
+  const continuation = item.lastSibling === false ? "│ " : "  "
   const name = safeText(task.name ?? task.task_summary ?? task.description ?? task.task_id)
   return [
     {
-      text: `${prefix}${indent}${statusGlyph(task.status)} ${name}`,
+      text: `${prefix}${indent}${branch}${statusGlyph(task.status)} ${name}`,
       style: { fg: statusColor(task.status), ...selection },
     },
     {
-      text: `    ${indent}${task.status.toUpperCase()}  ${elapsed(task, now)}`,
+      text: `${prefix}${indent}${continuation}  ${task.status.toUpperCase()}  ${elapsed(task, now)}`,
       style: { fg: STYLE.meta, dim: true, ...selection },
     },
   ]

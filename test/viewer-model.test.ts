@@ -141,10 +141,41 @@ describe("viewer state", () => {
     expect(state.expandedTurnId).toBeUndefined()
   })
 
+  test("#given a task tree #when initialized #then main rows are collapsed and enter expands their subagents", () => {
+    const items = [mainItem(), taskItem("st_a", "alpha"), taskItem("st_b", "bravo")]
+    const transcript = transcriptOf([turn("t1", "one")])
+    const collapsed = projectViewer(initialViewerState(items), makeData(items, transcript), viewport())
+    expect(collapsed.list.lines.some((line) => line.includes("alpha"))).toBe(false)
+    expect(collapsed.list.lines.some((line) => line.includes("▸ ◆ Main session"))).toBe(true)
+    expect(collapsed.footer).toContain("enter/→ expand")
+    expect(collapsed.footer).toContain("o open")
+
+    let state = updateViewer(initialViewerState(items), { type: "open" }, context(items, transcript))
+    expect(state.expandedRoots).toEqual(["main-1"])
+    const expanded = projectViewer(state, makeData(items, transcript), viewport())
+    expect(expanded.list.lines.some((line) => line.includes("└─✓ alpha"))).toBe(true)
+    expect(expanded.list.lines.some((line) => line.includes("▾ ◆ Main session"))).toBe(true)
+    expect(expanded.footer).toContain("enter/→ collapse")
+
+    state = updateViewer(state, { type: "open" }, context(items, transcript))
+    expect(state.expandedRoots).toEqual([])
+  })
+
+  test("#given two main sessions #when one is expanded #then the other keeps its subagents collapsed", () => {
+    const items = [mainItem(), taskItem("st_a", "alpha"), mainItem("main-2"), taskItem("st_b", "bravo", 1, "main-2")]
+    const transcript = transcriptOf([])
+    const state = updateViewer(initialViewerState(items), { type: "open" }, context(items, transcript))
+    const frame = projectViewer(state, makeData(items, transcript), viewport())
+    expect(frame.list.lines.some((line) => line.includes("alpha"))).toBe(true)
+    expect(frame.list.lines.some((line) => line.includes("bravo"))).toBe(false)
+    expect(frame.list.lines.some((line) => line.includes("main-2") && line.includes("▸"))).toBe(true)
+  })
+
   test("#given a selected task #when it is opened and then backed out #then the view follows the selection and returns to main", () => {
     const items = [mainItem(), taskItem("st_a", "alpha")]
     const transcript = transcriptOf([])
     let state = initialViewerState(items)
+    state = updateViewer(state, { type: "open" }, context(items, transcript))
     state = updateViewer(state, { type: "move", delta: 1 }, context(items, transcript))
     expect(state.selectedId).toBe("st_a")
     state = updateViewer(state, { type: "open" }, context(items, transcript))
@@ -157,6 +188,7 @@ describe("viewer state", () => {
     const items = [mainItem(), taskItem("st_a", "alpha")]
     const transcript = transcriptOf([turn("t1", "one"), turn("t2", "two")])
     let state = initialViewerState(items)
+    state = updateViewer(state, { type: "open" }, context(items, transcript))
     state = updateViewer(state, { type: "move", delta: 1 }, context(items, transcript))
     expect(state.selectedId).toBe("st_a")
     expect(state.selectedTurnId).toBeUndefined()
@@ -213,6 +245,7 @@ describe("viewer state", () => {
     const items = [mainItem(), taskItem("st_a", "alpha")]
     const empty = transcriptOf([])
     let state = initialViewerState(items)
+    state = updateViewer(state, { type: "open" }, context(items, empty))
     state = updateViewer(state, { type: "move", delta: 1 }, context(items, empty))
     state = updateViewer(state, { type: "open" }, context(items, empty))
     state = reconcileViewer(state, items, empty)
@@ -246,7 +279,9 @@ describe("viewer state", () => {
     }
     const items = [mainItem(), taskItem("st_a", "alpha"), runningItem]
     const transcript = transcriptOf([turn("t1", "one")])
-    let state = updateViewer(initialViewerState(items), { type: "toggle-filter", filter: "completed" }, context(items, transcript))
+    let state = updateViewer(initialViewerState(items), { type: "open" }, context(items, transcript))
+    expect(state.expandedRoots).toEqual(["main-1"])
+    state = updateViewer(state, { type: "toggle-filter", filter: "completed" }, context(items, transcript))
     expect(state.hiddenFilters).toEqual(["completed"])
     const frame = projectViewer(state, makeData(items, transcript), viewport())
     expect(frame.list.lines.some((line) => line.includes("alpha"))).toBe(false)

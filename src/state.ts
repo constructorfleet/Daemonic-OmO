@@ -22,6 +22,8 @@ export interface TaskTreeItem {
   readonly rootSessionId: string
   readonly depth: number
   readonly task?: TaskRecord
+  /** For tasks: whether this is the last child at its depth, so the tree can close its branch. */
+  readonly lastSibling?: boolean
 }
 
 export function decodeTaskRecord(value: unknown): TaskRecord | undefined {
@@ -51,42 +53,43 @@ export function decodeTaskRecord(value: unknown): TaskRecord | undefined {
 
 export function projectTaskTree(records: readonly TaskRecord[]): readonly TaskTreeItem[] {
   const roots = [...new Set(records.map((record) => record.root_session_id || record.parent_session_id))].sort()
-  const childrenBySession = new Map<string, TaskRecord>()
+  const byParent = new Map<string, TaskRecord[]>()
   for (const record of records) {
-    if (record.child_session_id !== undefined) childrenBySession.set(record.child_session_id, record)
+    const siblings = byParent.get(record.parent_session_id)
+    if (siblings === undefined) byParent.set(record.parent_session_id, [record])
+    else siblings.push(record)
   }
 
   const items: TaskTreeItem[] = []
   for (const rootSessionId of roots) {
     items.push({ id: `main:${rootSessionId}`, kind: "main", rootSessionId, depth: 0 })
-    const tasks = records
-      .filter((record) => record.root_session_id === rootSessionId || record.parent_session_id === rootSessionId)
-      .toSorted((a, b) => dateValue(a.created_at) - dateValue(b.created_at) || a.task_id.localeCompare(b.task_id))
-    for (const task of tasks) {
-      items.push({
-        id: task.task_id,
-        kind: "task",
-        rootSessionId,
-        depth: taskDepth(task, rootSessionId, childrenBySession),
-        task,
-      })
+    const inRoot = records.filter(
+      (record) => record.root_session_id === rootSessionId || record.parent_session_id === rootSessionId,
+    )
+    const inRootIds = new Set(inRoot.map((record) => record.task_id))
+    const seen = new Set<string>()
+    const childrenOf = (sessionId: string): readonly TaskRecord[] =>
+      (byParent.get(sessionId) ?? [])
+        .filter((record) => inRootIds.has(record.task_id) && !seen.has(record.task_id))
+        .toSorted(compareRecords)
+    const visit = (record: TaskRecord, depth: number, lastSibling: boolean): void => {
+      if (seen.has(record.task_id)) return
+      seen.add(record.task_id)
+      items.push({ id: record.task_id, kind: "task", rootSessionId, depth, task: record, lastSibling })
+      const children = record.child_session_id === undefined ? [] : childrenOf(record.child_session_id)
+      children.forEach((child, index) => visit(child, depth + 1, index === children.length - 1))
     }
+    const top = childrenOf(rootSessionId)
+    top.forEach((record, index) => visit(record, 1, index === top.length - 1))
+    // Records whose parent session is missing still need to be reachable under their root.
+    const orphans = inRoot.filter((record) => !seen.has(record.task_id)).toSorted(compareRecords)
+    orphans.forEach((record, index) => visit(record, 1, index === orphans.length - 1))
   }
   return items
 }
 
-function taskDepth(task: TaskRecord, root: string, childrenBySession: ReadonlyMap<string, TaskRecord>): number {
-  let depth = 1
-  let parent = task.parent_session_id
-  const seen = new Set([task.task_id])
-  while (parent !== root && depth < 12) {
-    const ancestor = childrenBySession.get(parent)
-    if (ancestor === undefined || seen.has(ancestor.task_id)) break
-    seen.add(ancestor.task_id)
-    depth += 1
-    parent = ancestor.parent_session_id
-  }
-  return depth
+function compareRecords(a: TaskRecord, b: TaskRecord): number {
+  return dateValue(a.created_at) - dateValue(b.created_at) || a.task_id.localeCompare(b.task_id)
 }
 
 function dateValue(value: string): number {
