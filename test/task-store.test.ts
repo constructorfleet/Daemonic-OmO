@@ -187,7 +187,7 @@ describe("readTaskDocument", () => {
 })
 
 describe("readRootDocument", () => {
-  test("#given a root session #when read #then it returns the same detailed document shape as a task", () => {
+  test("#given a legacy flat root session #when read #then it returns the same detailed document shape as a task", () => {
     const agentDir = temp()
     mkdirSync(join(agentDir, "sessions"))
     writeFileSync(
@@ -220,6 +220,25 @@ describe("readRootDocument", () => {
       "result(read): ok",
     ])
     expect(document.lineTurns).toEqual(["turn-root", "turn-root", "turn-root", "turn-root"])
+    expect(document.turns).toHaveLength(1)
+  })
+
+  test("#given a project-scoped session directory #when read #then the nested session file is found", () => {
+    const agentDir = temp()
+    const projectSessions = join(agentDir, "sessions", "--Users-me-src-demo--")
+    mkdirSync(projectSessions, { recursive: true })
+    writeFileSync(
+      join(projectSessions, "2026-01-01T00-00-00.000Z_main-2.jsonl"),
+      `${JSON.stringify({
+        id: "turn-nested",
+        type: "message",
+        message: { role: "assistant", content: [{ type: "text", text: "nested" }] },
+      })}\n`,
+    )
+
+    const document = readRootDocument(agentDir, "main-2")
+    expect(document.lines).toEqual(["assistant: nested"])
+    expect(document.lineTurns).toEqual(["turn-nested"])
     expect(document.turns).toHaveLength(1)
   })
 

@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto"
-import { closeSync, existsSync, fstatSync, openSync, readFileSync, readdirSync, readSync, realpathSync, statSync } from "node:fs"
+import { closeSync, existsSync, fstatSync, openSync, readFileSync, readdirSync, readSync, realpathSync, statSync, type Dirent } from "node:fs"
 import { homedir } from "node:os"
 import { basename, join, resolve } from "node:path"
 
@@ -106,8 +106,47 @@ export function readRootDocument(
 ): TranscriptDocument {
   if (!isSafeId(sessionId)) return buildEventDocument([])
   const maxBytes = options.maxBytes ?? DEFAULT_MAX_TRANSCRIPT_BYTES
-  const text = readTail(join(agentDir, "sessions", `${sessionId}.jsonl`), maxBytes) ?? ""
-  return buildTranscriptDocument(parseSessionTurns(text))
+  const files = findRootSessionFiles(agentDir, sessionId)
+  if (files.length === 0) return buildTranscriptDocument([])
+  const chosen = files.length > 2 ? [files[0]!, files[files.length - 1]!] : files
+  const texts = chosen
+    .map((file) => readTail(file, maxBytes))
+    .filter((text): text is string => text !== undefined)
+  return buildTranscriptDocument(parseSessionTurns(texts.join("")))
+}
+
+/**
+ * Root sessions live under `sessions/<encoded-project>/<timestamp>_<sessionId>.jsonl`.
+ * Older stores kept them flat at `sessions/<sessionId>.jsonl`, so check both.
+ */
+function findRootSessionFiles(agentDir: string, sessionId: string): readonly string[] {
+  const sessionsDir = join(agentDir, "sessions")
+  const files: string[] = []
+  const flat = join(sessionsDir, `${sessionId}.jsonl`)
+  if (existsSync(flat)) files.push(flat)
+  let entries: Dirent[]
+  try {
+    entries = readdirSync(sessionsDir, { withFileTypes: true })
+  } catch (error) {
+    if (isMissing(error)) return files
+    throw error
+  }
+  for (const entry of entries) {
+    if (!entry.isDirectory()) continue
+    const directory = join(sessionsDir, entry.name)
+    let names: string[]
+    try {
+      names = readdirSync(directory)
+    } catch {
+      continue
+    }
+    for (const name of names) {
+      if (name === `${sessionId}.jsonl` || name.endsWith(`_${sessionId}.jsonl`)) {
+        files.push(join(directory, name))
+      }
+    }
+  }
+  return files.sort()
 }
 
 function readChildSessionText(stateDir: string, taskId: string, maxBytes: number): string | undefined {
