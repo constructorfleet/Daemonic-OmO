@@ -333,11 +333,24 @@ export async function runViewer(options: ViewerOptions): Promise<void> {
     renderer.destroy()
   }
 
+  const scrollPage = (direction: "older" | "newer"): void => {
+    const sign = direction === "older" ? -1 : 1
+    if (state.focus === "tree") {
+      const rows = frame?.list.lines.length ?? 10
+      dispatch({ type: "move-selection", delta: sign * Math.max(1, Math.floor((rows - 1) / 2)) })
+      return
+    }
+    const rows = state.focus === "todo" ? frame?.todo?.lines.length : frame?.detail.lines.length
+    dispatch({ type: "scroll-transcript", direction, amount: Math.max(1, (rows ?? 10) - 1) })
+  }
+
   renderer.keyInput.on("keypress", (key) => {
     if (key.ctrl && key.name === "c") return shutdown()
     if (key.name === "q") return shutdown()
     if (key.name === "up") return dispatch({ type: "move", delta: -1 })
     if (key.name === "down") return dispatch({ type: "move", delta: 1 })
+    if (key.name === "pageup") return scrollPage("older")
+    if (key.name === "pagedown") return scrollPage("newer")
     if (key.name === "return" || key.name === "enter" || key.name === "right") return dispatch({ type: "open" })
     if (key.name === "o") {
       if (state.focus === "tree" && state.selectedId !== undefined) dispatch({ type: "open-item", id: state.selectedId })
@@ -397,6 +410,14 @@ export async function runViewer(options: ViewerOptions): Promise<void> {
   }
 
   todoPanel.onMouseDown = () => dispatch({ type: "set-focus", focus: "todo" })
+
+  todoPanel.onMouseScroll = (event) => {
+    const direction = event.scroll?.direction
+    if (direction !== "up" && direction !== "down") return
+    if (state.focus !== "todo") dispatch({ type: "set-focus", focus: "todo" })
+    const step = scrollStep(event)
+    dispatch({ type: "scroll-transcript", direction: direction === "up" ? "older" : "newer", amount: step })
+  }
 
   const timer = setInterval(() => reload(), options.refreshMs)
   reload(true)

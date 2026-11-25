@@ -34,6 +34,7 @@ The viewer discovers the configured OmO Native agent directory and falls back to
 ## Keys
 
 - `↑` / `↓`: select a main session or task; with the turn list focused, step between turns; with the todo pane focused, scroll it
+- `PageUp` / `PageDown`: page through the focused pane: move the task list selection, or scroll the transcript or todo pane
 - `Enter` / `→`: expand or collapse the selected main session in the tree; on an agent row, open its turn list with the newest turn selected; with the turn list focused, open the selected turn's detail inline (run headers have no transcript, so they only select)
 - `o`: open the selected main session or agent transcript without changing tree expansion
 - `←`: back one level (close the turn detail, then return focus to the task list)
