@@ -1,0 +1,9 @@
+{
+  "pid": 1,
+  "processStartedAtMs": 1,
+  "bootAtMs": 1,
+  "beatAt": 1,
+  "startedAt": 1,
+  "watch": true,
+  "exec": null
+}

@@ -1,0 +1,1 @@
+{"type":"dag.run.created","runKey":"fixture","name":"Fixture audit","definitionFingerprint":"scrubbed","nodeCount":1,"edgeCount":0,"schemaVersion":1,"runId":"dag_fixture","seq":1,"at":"2026-11-25T08:00:00.000Z","lane":"boundary"}

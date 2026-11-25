@@ -1,7 +1,6 @@
 import { closeSync, fstatSync, openSync, readFileSync, readdirSync, readSync, statSync } from "node:fs"
 import { join } from "node:path"
 
-import { decodeDagRun, type DagRunRecord } from "./dag.js"
 import { decodeTaskRecord, type TaskRecord } from "./state.js"
 import { parseTerminals } from "./terminals.js"
 import type { StoreOptions } from "./agent-dir.js"
@@ -16,7 +15,6 @@ import {
 } from "./transcript.js"
 
 const MAX_RECORD_BYTES = 256 * 1024
-const MAX_RUN_BYTES = 512 * 1024
 const ACTIVITY_TAIL_BYTES = 8 * 1024
 const DEFAULT_MAX_TRANSCRIPT_BYTES = 4 * 1024 * 1024
 
@@ -27,11 +25,6 @@ export interface TranscriptReadOptions {
 export interface TaskStoreSnapshot {
   readonly records: readonly TaskRecord[]
   readonly invalidRecords: number
-}
-
-export interface DagStoreSnapshot {
-  readonly runs: readonly DagRunRecord[]
-  readonly invalidRuns: number
 }
 
 export function loadTaskRecords(stateDir: string): TaskStoreSnapshot {
@@ -61,35 +54,6 @@ export function loadTaskRecords(stateDir: string): TaskStoreSnapshot {
     }
   }
   return { records, invalidRecords }
-}
-
-export function loadDagRuns(stateDir: string): DagStoreSnapshot {
-  let files: string[]
-  try {
-    files = readdirSync(join(stateDir, "dag", "runs")).filter((file) => file.endsWith(".json")).sort()
-  } catch (error) {
-    if (isMissing(error)) return { runs: [], invalidRuns: 0 }
-    throw error
-  }
-
-  const runs: DagRunRecord[] = []
-  let invalidRuns = 0
-  for (const file of files) {
-    try {
-      const path = join(stateDir, "dag", "runs", file)
-      if (statSync(path).size > MAX_RUN_BYTES) {
-        invalidRuns += 1
-        continue
-      }
-      const value: unknown = JSON.parse(readFileSync(path, "utf8"))
-      const run = decodeDagRun(value)
-      if (run === undefined) invalidRuns += 1
-      else runs.push(run)
-    } catch {
-      invalidRuns += 1
-    }
-  }
-  return { runs, invalidRuns }
 }
 
 /**
