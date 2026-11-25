@@ -147,7 +147,7 @@ Shared-file rules that make the waves safe: all daemon dependencies are added by
 | 11 | packages/daemon/src/{api/**,app.ts}, test/support/e2e-server.ts | 7 (ledger), 10 (guards) | 13, 14, 20, 26 |
 | 12 | packages/daemon/src/omo/**, features/omo.ts | 5 (pinned shapes), 8 (omo config) | 15, 16, 19, 25, 26 |
 | 13 | packages/daemon/src/observer/**, features/observer.ts | 9 (readers), 11 (doc frames) | 19, 21, 22 |
-| 14 | packages/daemon/src/projects/**, features/projects.ts | 11 (API) | 15, 16, 20 |
+| 14 | packages/daemon/src/core/types.ts (ProjectSettings), src/db/repos/projects.ts + DB/API Project fixtures, src/projects/**, features/projects.ts, test/projects/** | 11 (API; Todo 7's projects table already stores a JSON entity) | 15, 16, 20 |
 | 15 | packages/daemon/src/runs/{state-machine,engine,dispatcher,worktree,audit}.ts, features/runs.ts (thread-model lifecycle) | 12 (gateway), 14 (projects), 7 (runs table) | 17, 18, 23, 26 |
 | 16 | packages/daemon/src/runs/controls.ts, features/controls.ts | 12, 14 | 23 |
 | 17 | packages/daemon/src/scheduler/**, features/scheduler.ts | 15 (dispatch target) | 24, 26 |
@@ -315,6 +315,7 @@ Shared-file rules that make the waves safe: all daemon dependencies are added by
 - [ ] 14. Projects API with per-user scoping and project settings
   Recommended task executor category: unspecified-low
   What to do: `packages/daemon/src/projects/service.ts` + routes: `GET/POST /api/v1/projects`, `GET/PATCH/DELETE /api/v1/projects/:id`, `POST /api/v1/projects/:id/archive?force=`. Project fields: name, cwd (realpath, must be a directory the daemon user can read; git repo required for worktree runs), settings `{fullAccessOptIn false, maxRunning default user setting (1), defaultModel?, defaultReasoning?, worktreeForAdhoc false}`. There is no per-project permission preset (sessions run in the agent-dir default mode, see Run lifecycle); `fullAccessOptIn` gates only loop `check` commands, and enabling it is recorded in audit. `GET /api/v1/projects?include=discovered` also returns unregistered projects from `project-discovery` (view-only rows with `registered:false` until adopted via `POST /api/v1/projects {cwd}`). Non-admin users may register only directories under their `allowed_roots` (granted by an admin; empty by default); admins may register any readable directory. Schedules and loops require `isRepo(cwd)`. Archive returns 409 `state_conflict` while nonterminal runs exist; the `force=true` path (cancel them, then archive) is added by todo 15 in its own feature file.
+  Data-model clarification: the Todo 4 `Project` scaffold has top-level `maxRunning` and no settings object, while this todo's public contract must persist `settings {fullAccessOptIn, maxRunning, defaultModel?, defaultReasoning?, worktreeForAdhoc}`. Add readonly `ProjectSettings` in `src/core/types.ts`, move effective `maxRunning` into `Project.settings` (one source of truth), and update `src/db/repos/projects.ts` plus existing Project fixtures in `test/db` and `test/api` to decode/round-trip it in the existing JSON column; no SQLite migration is required. This is within Todo 14 because those files currently cannot store the specified settings.
   Must NOT do: no cross-user visibility except admin.
   Closes: GAP-1, GAP-3, GAP-14
   Parallelization: Wave 5 | Blocked by: 11 | Blocks: 15, 16, 20

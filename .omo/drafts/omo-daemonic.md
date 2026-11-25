@@ -4,7 +4,7 @@ status: review_unavailable_after_ulw-execute
 intent: clear
 review_required: true
 plan_path: .omo/plans/omo-daemonic.md
-plan_sha256: ba2596674780e6348e0c6560b36bdcbec1c3ae8bcbfac1aa91476b6e7d5af3b0
+plan_sha256: 0be2263a60456dcaab9e9a3f4a56c64283d91000fda1b5bf4a9f707b0c0ada87
 review_round_id: r6-20261125-t6proof
 review_round_limit: 6
 pending-action: final F1/gate reviewer must audit execution amendment
@@ -18,7 +18,7 @@ review:
     plan_sha256: 20602bfe7811ff260a525a7025d2bfa816b2656ca213f454673e305a2075be3a
     launch_id: l6-t6proof
     session: null
-    result: "Round r6 plan-reviewer dispatch was refused because ulw-execute is active; no session/review receipt. Attempted snapshot SHA 20602bfe...05be3a. Current amended plan SHA 2bc49067...8026c6; final F1/execution gate reviewer must audit Todo30/31 before completion."
+    result: "Round r6 plan-reviewer dispatch was refused because ulw-execute is active; no session/review receipt. Attempted snapshot SHA 20602bfe...05be3a. Previously recorded plan SHA 2bc49067...8026c6; current plan SHA 0be2263a...0ada87 adds Todo 14 Project.settings persistence because the existing type/repo dropped specified settings. Final F1/execution gate reviewer must audit all execution amendments, including this model scope."
 approach: Bun workspace monorepo (store, tui, daemon, web); observer+gateway design - per-user omo operator hosts run agents, daemon controls via thread SDK bridge and reads omo state from disk; own scheduler/loops/runs/audit in SQLite; OIDC multi-user with per-user agent dirs; React+xyflow web UI at omo-agents parity; launchd; TDD + live contract suite
 ---
 
