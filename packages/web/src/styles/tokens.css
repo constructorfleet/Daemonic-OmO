@@ -1,0 +1,98 @@
+@import "tailwindcss";
+
+:root {
+  color-scheme: dark;
+  font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+
+  --color-panel: #0b1020;
+  --color-surface: #141d33;
+  --color-selection: #1b2a4a;
+  --color-accent: #8be9fd;
+  --color-assistant: #a5d6ff;
+  --color-muted: #7c8aa5;
+  --color-tool: #e0af68;
+  --color-success: #9ece6a;
+  --color-error: #f7768e;
+  --color-image: #cba6f7;
+  --color-rail: #7aa2f7;
+  --color-text: #cbd5e1;
+  --color-heading: #e7edf7;
+  --color-hairline: #34405e;
+  --color-focus: #8be9fd;
+
+  --space-1: 0.25rem;
+  --space-2: 0.5rem;
+  --space-3: 0.75rem;
+  --space-4: 1rem;
+  --space-5: 1.25rem;
+  --space-6: 1.5rem;
+  --space-8: 2rem;
+  --space-10: 2.5rem;
+  --space-12: 3rem;
+  --space-16: 4rem;
+
+  --font-size-caption: 0.875rem;
+  --font-size-body: 1rem;
+  --font-size-lead: 1.125rem;
+  --font-size-title: 1.75rem;
+  --font-size-display: 2.5rem;
+
+  --radius-control: 0.5rem;
+  --radius-surface: 0.75rem;
+  --sidebar-width: 15rem;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html {
+  min-inline-size: 20rem;
+  background: var(--color-panel);
+  color: var(--color-text);
+  accent-color: var(--color-accent);
+  scrollbar-color: var(--color-muted) var(--color-panel);
+  scrollbar-width: thin;
+}
+
+body {
+  min-inline-size: 20rem;
+  min-block-size: 100dvb;
+  margin: 0;
+}
+
+::selection {
+  color: var(--color-heading);
+  background: var(--color-selection);
+}
+
+:focus-visible {
+  outline: 2px solid var(--color-focus);
+  outline-offset: 2px;
+}
+
+a {
+  color: inherit;
+  text-underline-offset: 0.2em;
+}
+
+button {
+  font: inherit;
+}
+
+@theme inline {
+  --color-panel: var(--color-panel);
+  --color-surface: var(--color-surface);
+  --color-selection: var(--color-selection);
+  --color-accent: var(--color-accent);
+  --color-assistant: var(--color-assistant);
+  --color-muted: var(--color-muted);
+  --color-tool: var(--color-tool);
+  --color-success: var(--color-success);
+  --color-error: var(--color-error);
+  --color-image: var(--color-image);
+  --color-rail: var(--color-rail);
+  --color-text: var(--color-text);
+  --color-heading: var(--color-heading);
+  --color-hairline: var(--color-hairline);
+}
