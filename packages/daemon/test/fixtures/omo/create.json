@@ -1,0 +1,12 @@
+{
+  "kind": "ok",
+  "thread": "d8c2a740-5530-89cf-a3a9-9f9f1ca1993a",
+  "name": "omo-daemonic-contract-a2",
+  "status": "live",
+  "state": "idle",
+  "cwd": "<ROOT>/project",
+  "created_at": "2026-11-25T08:29:01.985Z",
+  "updated_at": "2026-11-25T08:29:01.985Z",
+  "link": "[omo-daemonic-contract-a2](omo-thread://v1/d8c2a740-5530-89cf-a3a9-9f9f1ca1993a)",
+  "deduplicated": false
+}

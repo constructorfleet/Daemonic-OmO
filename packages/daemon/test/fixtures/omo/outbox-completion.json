@@ -1,0 +1,26 @@
+{
+  "kind": "ok",
+  "binding_id": "bnd-ce75a8e7-9c0e-42e4-9116-ee9429080778",
+  "revision": 1,
+  "status": "active",
+  "rows": [
+    {
+      "cursor": 1,
+      "binding_id": "bnd-ce75a8e7-9c0e-42e4-9116-ee9429080778",
+      "revision": 1,
+      "event": "completion",
+      "text": "odc-a6 settled",
+      "state": "pending",
+      "created_at": "2026-11-25T08:29:10.668Z",
+      "edit_message_id": null,
+      "provider_message_id": null,
+      "reply_token": null,
+      "question_state": null,
+      "outcome": "completed",
+      "answered_by": null,
+      "answer_state": null
+    }
+  ],
+  "next_cursor": 1,
+  "acked_cursor": 0
+}

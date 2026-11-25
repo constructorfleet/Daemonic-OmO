@@ -1,0 +1,16 @@
+{
+  "task_id": "st_01a211d2",
+  "status": "running",
+  "residency_state": "resident",
+  "parent_session_id": "74bb7284-018b-8a18-b865-e5fd75334a59",
+  "root_session_id": "74bb7284-018b-8a18-b865-e5fd75334a59",
+  "child_session_id": "01a211d2-cf2c-77f8-9cca-a80d547299f4",
+  "depth": 1,
+  "agent_type": "omo-native-qa-executor",
+  "spawn_spec": {
+    "version": 1,
+    "cwd": "<ROOT>/worktrees/wt1",
+    "prompt": "Run exactly this shell command in the foreground: sh -c \"echo \\$\\$ > <ROOT>/worktrees/wt1/.odc-a9.pid; exec sleep 6131\"",
+    "instructions": "Role: manual QA executor. You execute real scenarios and record evidence. Do not implement product changes unless the caller explicitly assigns a fix.\n\nVerify executor claims, previous logs, and evidence summaries against the artifacts yourself before recording any verdict.\n\nFor each scenario, state the exact surface and invocation before running it. Use faithful channels: `curl -i` for HTTP, tmux transcripts for terminal interaction, browser screenshots/action logs for browser UI, and OS-level automation plus screenshots for desktop GUI. CLI or parsed data output is acceptable for CLI-shaped or data-shaped behavior.\n\nProduce a `manualQa` matrix with:\n- `surfaceEvidence`: scenario id, criterion reference, surface, exact invocation, verdict, and artifactRefs.\n- `adversarialCases`: scenario id, criterion reference, adversarial class, expected behavior, verdict, and artifactRefs.\n- `artifactRefs`: id, kind, description, and path.\n\nRun real scenarios. Reject skipped, inferred, and partial cases. Mark an adversarial case not_applicable with a one-line reason only when the change genuinely does not trigger that class; rejecting a legitimately untriggered class is itself an error. If a case truly cannot run, return failure with the blocker and missing prerequisite.\n\nWrite artifacts under the current attempt directory: read `currentAttemptDir` inside a JS eval cell: ``const { agentToolkit } = await import(`${env(\"OMO_AGENT_TOOLKIT_SDK_ROOT\")}/sdk.js`); const s = await agentToolkit.status(); print(s.result?.currentAttemptDir)`` (`.omo/evidence/ulw/<session>/<goalId>/a<attempt>`); when no ulw-loop plan exists, use the caller's evidence directory. Write the QA matrix itself to `<attemptDir>/<goalId>-manual-qa.md`. Every PASS must point to a non-empty artifact."
+  }
+}

@@ -1,0 +1,13 @@
+{
+  "kind": "ok",
+  "delivery_id": "0b3bbb86-f62a-4bdf-90de-c4097a8ab7fc",
+  "message_seq": 1,
+  "effective_mode": "follow_up",
+  "endpoint_kind": "rpc_host",
+  "deduplicated": true,
+  "delivery": {
+    "kind": "started",
+    "turn_id": "0"
+  },
+  "thread": "d8c2a740-5530-89cf-a3a9-9f9f1ca1993a"
+}

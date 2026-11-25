@@ -1,0 +1,32 @@
+{
+  "kind": "ok",
+  "binding": {
+    "schema_version": 1,
+    "binding_id": "bnd-ce75a8e7-9c0e-42e4-9116-ee9429080778",
+    "revision": 1,
+    "status": "active",
+    "platform": "custom",
+    "account_id": "omo-daemonic",
+    "chat_id": "odc-abf3e86b-8e55-88d9-a988-b37cbdc3683f",
+    "thread_id": "@chat",
+    "root_message_id": null,
+    "progress_message_id": null,
+    "session_realm_id": "realm-c3de9fef5b06a97a26c169c79532a114",
+    "session_durable_id": "abf3e86b-8e55-88d9-a988-b37cbdc3683f",
+    "direction": {
+      "inbound": false,
+      "outbound": true
+    },
+    "inbound_mode": "auto",
+    "outbound_events": [
+      "completion"
+    ],
+    "policy_id": "default",
+    "created_at": "2026-11-25T08:29:07.950Z",
+    "updated_at": "2026-11-25T08:29:07.950Z",
+    "lease_started_at": "2026-11-25T08:29:07.950Z",
+    "ttl_seconds": 604800,
+    "expires_at": "2026-12-02T08:29:07.950Z"
+  },
+  "deduplicated": false
+}

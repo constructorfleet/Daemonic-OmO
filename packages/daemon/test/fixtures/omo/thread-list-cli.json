@@ -1,0 +1,110 @@
+{
+  "kind": "ok",
+  "threads": [
+    {
+      "thread": "dfb7593a-5efc-8ebb-84e4-dbc8acea60dd",
+      "name": "omo-daemonic-contract-a8",
+      "status": "live",
+      "state": {},
+      "model": {
+        "provider": "zai",
+        "id": "glm-5.3"
+      },
+      "activity": "idle",
+      "cwd": "<ROOT>/other",
+      "created_at": "2026-11-25T08:29:05.863Z",
+      "updated_at": "2026-11-25T08:29:05.986Z",
+      "link": "[omo-daemonic-contract-a8](omo-thread://v1/dfb7593a-5efc-8ebb-84e4-dbc8acea60dd)",
+      "surface": "daemon",
+      "controls": {}
+    },
+    {
+      "thread": "d8c2a740-5530-89cf-a3a9-9f9f1ca1993a",
+      "name": "omo-daemonic-contract-a2",
+      "status": "live",
+      "state": {},
+      "model": {
+        "provider": "zai",
+        "id": "glm-5.3-flash"
+      },
+      "activity": "running",
+      "cwd": "<ROOT>/project",
+      "created_at": "2026-11-25T08:29:01.622Z",
+      "updated_at": "2026-11-25T08:29:05.844Z",
+      "link": "[omo-daemonic-contract-a2](omo-thread://v1/d8c2a740-5530-89cf-a3a9-9f9f1ca1993a)",
+      "surface": "daemon",
+      "controls": {}
+    },
+    {
+      "thread": "42444df6-1b69-8687-b406-ab6c0d6d6135",
+      "name": "omo-daemonic-contract-a5",
+      "status": "live",
+      "state": {},
+      "model": {
+        "provider": "zai",
+        "id": "glm-5.3"
+      },
+      "activity": "idle",
+      "cwd": "<ROOT>/worktrees/wt1",
+      "created_at": "2026-11-25T08:29:05.638Z",
+      "updated_at": "2026-11-25T08:29:05.766Z",
+      "link": "[omo-daemonic-contract-a5](omo-thread://v1/42444df6-1b69-8687-b406-ab6c0d6d6135)",
+      "surface": "daemon",
+      "controls": {}
+    },
+    {
+      "thread": "7f822bd4-8c1c-875a-837e-c0578920407e",
+      "name": "omo-daemonic-contract-a4-ask",
+      "status": "live",
+      "state": {},
+      "model": {
+        "provider": "zai",
+        "id": "glm-5.3"
+      },
+      "activity": "idle",
+      "cwd": "<ROOT>/project",
+      "created_at": "2026-11-25T08:29:05.443Z",
+      "updated_at": "2026-11-25T08:29:05.567Z",
+      "link": "[omo-daemonic-contract-a4-ask](omo-thread://v1/7f822bd4-8c1c-875a-837e-c0578920407e)",
+      "surface": "daemon",
+      "controls": {}
+    },
+    {
+      "thread": "d6300850-bb68-8358-9290-7b6158d34c5a",
+      "name": "omo-daemonic-contract-a3",
+      "status": "live",
+      "state": {},
+      "model": {
+        "provider": "zai",
+        "id": "glm-5.3"
+      },
+      "activity": "idle",
+      "cwd": "<ROOT>/project",
+      "created_at": "2026-11-25T08:29:05.177Z",
+      "updated_at": "2026-11-25T08:29:05.306Z",
+      "link": "[omo-daemonic-contract-a3](omo-thread://v1/d6300850-bb68-8358-9290-7b6158d34c5a)",
+      "surface": "daemon",
+      "controls": {}
+    },
+    {
+      "thread": "c17796e7-97fb-8401-bdbc-b3af05c2651a",
+      "name": "omo-daemonic-contract-a2p",
+      "status": "live",
+      "state": {},
+      "model": {
+        "provider": "zai",
+        "id": "glm-5.3-flash"
+      },
+      "activity": "idle",
+      "cwd": "<ROOT>/project",
+      "created_at": "2026-11-25T08:29:02.328Z",
+      "updated_at": "2026-11-25T08:29:05.144Z",
+      "link": "[omo-daemonic-contract-a2p](omo-thread://v1/c17796e7-97fb-8401-bdbc-b3af05c2651a)",
+      "surface": "daemon",
+      "controls": {}
+    }
+  ],
+  "scope": "all",
+  "remote_unavailable": "relay_requires_paid_plan",
+  "aliases_unavailable": "not_asked"
+}

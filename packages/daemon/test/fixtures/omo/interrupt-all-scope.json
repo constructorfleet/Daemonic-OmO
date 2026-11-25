@@ -1,0 +1,10 @@
+{
+  "kind": "ok",
+  "thread": "dfb7593a-5efc-8ebb-84e4-dbc8acea60dd",
+  "interrupted": false,
+  "background": {
+    "status": "stopped",
+    "stopped": [],
+    "failed": []
+  }
+}

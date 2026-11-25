@@ -1,0 +1,144 @@
+{
+  "action": "state",
+  "sessionId": "rpc-2",
+  "durableSessionId": "113daa4d-5213-86d1-96c7-dd79ecda491a",
+  "state": {
+    "answeredUiRequests": [],
+    "paused": true,
+    "pausedNoticeCount": 1,
+    "holds": [
+      {
+        "kind": "unattended",
+        "key": "unattended",
+        "since": "2026-11-25T08:29:23.942Z",
+        "sourceCounts": {
+          "session_control_delivery": 1
+        }
+      }
+    ],
+    "lifecycle": {
+      "state": "held",
+      "seq": 2,
+      "epoch": 0,
+      "epochOrigin": "automatic",
+      "humanInputRevision": 0,
+      "selfSettleEligible": true,
+      "runPaused": false,
+      "since": "2026-11-25T08:29:23.942Z",
+      "role": "root",
+      "rootSessionId": "113daa4d-5213-86d1-96c7-dd79ecda491a",
+      "restoring": false,
+      "persisted": true,
+      "waitingOn": {
+        "children": 0,
+        "background": [],
+        "human": []
+      },
+      "holds": [
+        {
+          "kind": "unattended",
+          "since": "2026-11-25T08:29:23.942Z"
+        }
+      ],
+      "activityRevision": {
+        "instanceId": "aeb15695-b324-493e-b2be-f7cedfc43ef8",
+        "revision": 0
+      },
+      "observedAt": "2026-11-25T08:29:27.389Z"
+    },
+    "pendingQuestions": [],
+    "pendingDialogs": [],
+    "permissionPreset": "full-access",
+    "permissionPresetSource": "host_default",
+    "permissionPresetStatus": "applied",
+    "effectivePermissionPreset": "full-access",
+    "model": {
+      "id": "glm-5.3",
+      "name": "GLM-5.3",
+      "api": "openai-completions",
+      "provider": "zai",
+      "baseUrl": "https://api.z.ai/api/coding/paas/v4",
+      "reasoning": true,
+      "thinkingLevelMap": {
+        "off": null,
+        "minimal": null,
+        "low": "low",
+        "medium": null,
+        "high": "high",
+        "xhigh": null,
+        "max": "max"
+      },
+      "input": [
+        "text"
+      ],
+      "cost": {
+        "input": 1.4,
+        "output": 4.4,
+        "cacheRead": 0.26,
+        "cacheWrite": 0
+      },
+      "compat": {
+        "supportsStore": false,
+        "supportsDeveloperRole": false,
+        "supportsReasoningEffort": true,
+        "maxTokensField": "max_tokens",
+        "thinkingFormat": "zai",
+        "supportsStrictMode": true,
+        "zaiToolStream": true
+      },
+      "contextWindow": 1000000,
+      "maxTokens": 131072,
+      "type": "chat"
+    },
+    "pendingModelSwitch": null,
+    "thinkingLevel": "low",
+    "thinkingLevelSource": "default",
+    "sessionModelThinkingLevels": {
+      "zai/glm-5.3-flash": "low",
+      "zai/glm-5.3": "low"
+    },
+    "fastMode": false,
+    "isStreaming": false,
+    "pausedHeldInputCount": 0,
+    "runPaused": false,
+    "pause": {
+      "pauseSeq": 1,
+      "records": [
+        {
+          "kind": "unattended",
+          "key": "unattended"
+        }
+      ]
+    },
+    "isCompacting": false,
+    "retryAttempt": 0,
+    "isBashRunning": false,
+    "steeringMode": "all",
+    "followUpMode": "one-at-a-time",
+    "sessionFile": "<ROOT>/agent/sessions/--var-folders-sc-xq3g1qgx3hd0gl10w2l8rnm80000gn-T-tmp.kLKbBNaWml-omo-contract-CQs8eS-project--/2026-11-25T08-29-23-096Z_113daa4d-5213-86d1-96c7-dd79ecda491a.jsonl",
+    "sessionId": "113daa4d-5213-86d1-96c7-dd79ecda491a",
+    "sessionName": "omo-daemonic-contract-a7",
+    "cwd": "<ROOT>/project",
+    "projectTrusted": false,
+    "steering": [],
+    "followUp": [],
+    "ordered": [],
+    "autoCompactionEnabled": true,
+    "messageCount": 0,
+    "pendingMessageCount": 0,
+    "usageTotals": {
+      "input": 0,
+      "output": 0,
+      "cacheRead": 0,
+      "cacheWrite": 0,
+      "cost": 0
+    },
+    "contextUsage": {
+      "tokens": 0,
+      "contextWindow": 1000000,
+      "percent": 0
+    },
+    "favoriteModels": [],
+    "scopedModels": []
+  }
+}

@@ -1,0 +1,12 @@
+{
+  "kind": "error",
+  "error": {
+    "code": "scope_denied",
+    "message": "This session runs in an unknown approval mode; a thread it creates cannot run in workspace, which allows more.",
+    "next_action": "Pass this session's own mode or a narrower one (ask is always allowed), or leave permission_preset unset.",
+    "details": {
+      "reason": "permission_preset_wider",
+      "requested": "workspace"
+    }
+  }
+}

@@ -1,0 +1,25 @@
+{
+  "kind": "ok",
+  "thread": "d8c2a740-5530-89cf-a3a9-9f9f1ca1993a",
+  "name": "omo-daemonic-contract-a2",
+  "status": "live",
+  "state": "idle",
+  "model": {
+    "provider": "zai",
+    "id": "glm-5.3-flash"
+  },
+  "activity": "idle",
+  "cwd": "<ROOT>/project",
+  "created_at": "2026-11-25T08:29:01.996Z",
+  "updated_at": "2026-11-25T08:29:01.996Z",
+  "link": "[omo-daemonic-contract-a2](omo-thread://v1/d8c2a740-5530-89cf-a3a9-9f9f1ca1993a)",
+  "controls": [
+    "send",
+    "read",
+    "rename",
+    "set_model",
+    "set_reasoning",
+    "interrupt"
+  ],
+  "deduplicated": false
+}

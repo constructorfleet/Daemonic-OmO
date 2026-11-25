@@ -1,0 +1,18 @@
+{
+  "kind": "ok",
+  "thread": {
+    "thread_id": "d6300850-bb68-8358-9290-7b6158d34c5a",
+    "title": "omo-daemonic-contract-a3",
+    "cwd": "<ROOT>/project",
+    "status": "live",
+    "session_path": "<ROOT>/agent/sessions/--var-folders-sc-xq3g1qgx3hd0gl10w2l8rnm80000gn-T-tmp.kLKbBNaWml-omo-contract-CQs8eS-project--/2026-11-25T08-29-05-177Z_d6300850-bb68-8358-9290-7b6158d34c5a.jsonl",
+    "endpoint": {
+      "kind": "rpc_host",
+      "socket": "<ROOT>/agent/rpc/rpc.sock",
+      "routing_id": "rpc-3",
+      "durable_session_id": "d6300850-bb68-8358-9290-7b6158d34c5a"
+    },
+    "surface": "daemon",
+    "alive": true
+  }
+}

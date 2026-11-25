@@ -1,0 +1,6 @@
+{
+  "sdkLoad": "fail",
+  "presetNames": [],
+  "version": null,
+  "detail": "sdk_unavailable: Cannot find module '<ROOT>/no-such-plugin/runtime/thread-sdk/sdk.js' imported from <HOME>/src/omo-daemonic-wt/omo-daemonic-wave-2-todo5/packages/daemon/test/contract/sdk-child.ts"
+}

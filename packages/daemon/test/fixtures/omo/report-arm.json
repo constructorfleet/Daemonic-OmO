@@ -1,0 +1,13 @@
+{
+  "kind": "ok",
+  "binding_id": "bnd-ce75a8e7-9c0e-42e4-9116-ee9429080778",
+  "revision": 1,
+  "event": "completion",
+  "cursor": null,
+  "reply_token": null,
+  "armed": true,
+  "deduplicated": false,
+  "wake": {
+    "reached": true
+  }
+}
