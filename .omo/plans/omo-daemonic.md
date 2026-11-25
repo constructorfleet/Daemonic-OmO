@@ -371,7 +371,7 @@ Shared-file rules that make the waves safe: all daemon dependencies are added by
   QA scenarios: happy - FakeGateway loop of 3 iterations ending on marker, event log shows iteration_started x3 then succeeded (Evidence `.omo/evidence/task-18-omo-daemonic.txt`); failure - loop hitting maxIterations ends `exhausted` with stopReason.
   Commit: Y | feat(daemon): loops with done predicates, budgets and cancellation
 
-- [ ] 19. omo-native schedules, DAG runs and DAG library APIs
+- [x] 19. omo-native schedules, DAG runs and DAG library APIs
   Recommended task executor category: unspecified-high
   What to do: Routes scoped to the user's agent dir: `GET /api/v1/omo/schedules` (from schedule-doc: id, state, dueAt, everyMs, fireCount, prompt preview, session link, plus `runners: {live, total}` and a `willFire: false` flag when no live runner exists), `POST /api/v1/omo/schedules/:id/cancel` (runs `omo schedule cancel <id>` with `OMO_CODING_AGENT_DIR`; if the CLI fails with `internal_key_unavailable` or any non-zero exit, return 503 with the stderr tail and the command to run manually), `GET /api/v1/projects/:id/dag-runs` and doc `dag:<projectId>:<runId>` (todo 13), `GET /api/v1/dag-library?projectId=` (saved definitions). DAG data comes from the disk journal and node task transcripts only (todo 13); no mass-ulw RPC subscription. DAG node actions are presented as "message the owning session" via todo 16's send.
   Must NOT do: no external workflow start/cancel/retry (no supported surface); no writes to `schedule/` or `dag/`.
