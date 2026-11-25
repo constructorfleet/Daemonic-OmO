@@ -4,10 +4,11 @@ import { NotFoundPage } from "../components/not-found"
 
 function RootLayout() {
   const pathname = useRouterState({ select: (state) => state.location.pathname })
-  const pageTitle = NAVIGATION.find((item) => item.href === pathname)?.label ?? "Page not found"
+  const activePath = pathname === "/" ? "/projects" : pathname
+  const pageTitle = NAVIGATION.find((item) => item.href === activePath)?.label ?? "Page not found"
 
   return (
-    <AppShell activePath={pathname} pageTitle={pageTitle}>
+    <AppShell activePath={activePath} pageTitle={pageTitle}>
       <Outlet />
     </AppShell>
   )

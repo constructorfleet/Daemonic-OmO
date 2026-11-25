@@ -12,6 +12,24 @@ const destinations = [
 ] as const
 
 test.describe("application shell", () => {
+  test("renders the Projects heading at the root route", async ({ page }) => {
+    await page.goto("/")
+
+    await expect(page.getByRole("heading", { level: 1, name: "Projects" })).toBeVisible()
+  })
+
+  test("marks Projects as active at the root route", async ({ page }) => {
+    await page.goto("/")
+
+    await expect(page.getByTestId("nav-projects")).toHaveAttribute("aria-current", "page")
+  })
+
+  test("exposes a stable selector for the home link", async ({ page }) => {
+    await page.goto("/")
+
+    await expect(page.getByTestId("home-link")).toHaveAttribute("href", "/projects")
+  })
+
   test("routes every primary navigation item to its page", async ({ page }) => {
     await page.goto("/")
 
@@ -27,6 +45,6 @@ test.describe("application shell", () => {
 
     await expect(page.getByRole("heading", { name: "Page not found" })).toBeVisible()
     await expect(page.getByText(/does not exist/i)).toBeVisible()
-    await expect(page.getByRole("link", { name: "Back to projects" })).toHaveAttribute("href", "/projects")
+    await expect(page.getByTestId("not-found-recovery")).toHaveAttribute("href", "/projects")
   })
 })

@@ -23,7 +23,7 @@ export function AppShell({ activePath, pageTitle, children }: AppShellProps) {
   return (
     <div className="app-shell">
       <aside className="app-shell__sidebar">
-        <a className="brand" href="/projects" aria-label="omo-daemonic home">
+        <a className="brand" href="/projects" aria-label="omo-daemonic home" data-testid="home-link">
           <span className="brand__mark" aria-hidden="true" />
           <span>omo-daemonic</span>
         </a>
