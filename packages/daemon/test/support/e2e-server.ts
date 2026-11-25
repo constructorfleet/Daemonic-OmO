@@ -58,9 +58,17 @@ function bodyRecord(body: unknown): Record<string, unknown> {
   return body
 }
 
-function controlRouter(target: { clock: FakeClock; gateway: FakeGateway; agentDir: string }): Router {
+function controlRouter(target: { clock: FakeClock; gateway: FakeGateway; agentDir: string; app: App }): Router {
   const router = new Router()
   const read = async (request: Request): Promise<Record<string, unknown>> => bodyRecord(await request.json())
+  router.add({
+    method: "POST",
+    path: "/__test/stream/close",
+    handle: () => {
+      target.app.hub.closeAll()
+      return new Response(null, { status: 204 })
+    },
+  })
   router.add({
     method: "POST",
     path: "/__test/clock/advance",
@@ -184,7 +192,7 @@ export async function startE2eServer(options: E2eServerOptions = {}): Promise<E2
       ...(options.staticDir === undefined ? {} : { staticDir: options.staticDir }),
     })
     app = created
-    const control = controlsEnabled ? controlHandler(controlRouter({ clock, gateway, agentDir })) : null
+    const control = controlsEnabled ? controlHandler(controlRouter({ clock, gateway, agentDir, app: created })) : null
     handler = (request, bunServer) => control !== null && new URL(request.url).pathname.startsWith("/__test/")
       ? control(request)
       : created.fetch(request, bunServer)
@@ -209,10 +217,28 @@ export async function startE2eServer(options: E2eServerOptions = {}): Promise<E2
 }
 
 if (import.meta.main) {
-  const { values } = parseArgs({ args: Bun.argv.slice(2), options: { fixtures: { type: "string" }, port: { type: "string" } } })
+  const { values } = parseArgs({
+    args: Bun.argv.slice(2),
+    options: {
+      fixtures: { type: "string" },
+      port: { type: "string" },
+      staticDir: { type: "string" },
+      sub: { type: "string" },
+    },
+  })
   const port = values.port === undefined ? 0 : Number(values.port)
   if (!Number.isInteger(port) || port < 0 || port > 65_535) throw new RangeError(`--port must be 0-65535, got ${values.port}`)
-  const running = await startE2eServer({ ...(values.fixtures === undefined ? {} : { fixtures: values.fixtures }), port })
+  const running = await startE2eServer({
+    ...(values.fixtures === undefined ? {} : { fixtures: values.fixtures }),
+    ...(values.staticDir === undefined ? {} : { staticDir: values.staticDir }),
+    port,
+  })
+  running.idp.identity = {
+    sub: values.sub ?? E2E_ADMIN_SUB,
+    email: "e2e-admin@example.test",
+    email_verified: true,
+    name: "E2E Admin",
+  }
   console.log(JSON.stringify({
     ready: true,
     url: running.url,

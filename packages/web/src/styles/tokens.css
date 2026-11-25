@@ -18,7 +18,9 @@
   --color-text: #cbd5e1;
   --color-heading: #e7edf7;
   --color-hairline: #34405e;
+  --color-control-edge: #596783;
   --color-focus: #8be9fd;
+  --color-scrim: #000000;
 
   --space-1: 0.25rem;
   --space-2: 0.5rem;
@@ -40,6 +42,29 @@
   --radius-control: 0.5rem;
   --radius-surface: 0.75rem;
   --sidebar-width: 15rem;
+}
+
+@media (prefers-color-scheme: light) {
+  :root {
+    color-scheme: light;
+    --color-panel: #f6f8fb;
+    --color-surface: #ffffff;
+    --color-selection: #e5edf6;
+    --color-accent: #006781;
+    --color-assistant: #315f7c;
+    --color-muted: #536274;
+    --color-tool: #7a4f05;
+    --color-success: #28623b;
+    --color-error: #a3293b;
+    --color-image: #694a91;
+    --color-rail: #385e96;
+    --color-text: #293342;
+    --color-heading: #121a26;
+    --color-hairline: #c4ceda;
+    --color-control-edge: #7a879a;
+    --color-focus: #005fcc;
+    --color-scrim: #121a26;
+  }
 }
 
 * {
@@ -76,6 +101,18 @@ a {
   text-underline-offset: 0.2em;
 }
 
+input,
+textarea,
+[contenteditable="true"] {
+  caret-color: var(--color-accent);
+}
+
+input::placeholder,
+textarea::placeholder {
+  color: var(--color-muted);
+  opacity: 1;
+}
+
 button {
   font: inherit;
 }
@@ -95,4 +132,5 @@ button {
   --color-text: var(--color-text);
   --color-heading: var(--color-heading);
   --color-hairline: var(--color-hairline);
+  --color-control-edge: var(--color-control-edge);
 }

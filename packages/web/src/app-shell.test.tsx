@@ -44,4 +44,33 @@ describe("application shell", () => {
 
     expect(account.getAttribute("aria-expanded")).toBe("false")
   })
+
+  it("moves focus into the account menu and restores it when dismissed", () => {
+    const view = render(
+      <AppShell activePath="/projects" pageTitle="Projects">
+        <p>Route content</p>
+      </AppShell>,
+    )
+    const account = view.getByRole("button", { name: "Account" })
+
+    fireEvent.click(account)
+    fireEvent.keyDown(account, { key: "ArrowDown" })
+
+    const signOut = view.getByRole("menuitem", { name: "Sign out" })
+    expect(document.activeElement).toBe(signOut)
+    fireEvent.keyDown(signOut, { key: "Escape" })
+
+    expect(view.queryByRole("menu")).toBeNull()
+    expect(document.activeElement).toBe(account)
+  })
+
+  it("hides account actions from the sign-in page", () => {
+    const view = render(
+      <AppShell activePath="/login" pageTitle="Sign in">
+        <p>Route content</p>
+      </AppShell>,
+    )
+
+    expect(view.queryByRole("button", { name: "Account" })).toBeNull()
+  })
 })
