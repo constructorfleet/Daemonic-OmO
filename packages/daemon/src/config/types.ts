@@ -79,6 +79,8 @@ export interface LimitsConfig {
   readonly observerImageCacheBytes: number
   readonly threadMessageMaxBytes: number
   readonly threadQueueTtlMs: number
+  readonly omoCommandTimeoutMs: number
+  readonly omoCommandStderrTailChars: number
 }
 
 export interface OmoConfig {
@@ -154,4 +156,6 @@ export const DEFAULT_LIMITS: LimitsConfig = {
   observerImageCacheBytes: 67_108_864,
   threadMessageMaxBytes: 1_048_576,
   threadQueueTtlMs: 86_400_000,
+  omoCommandTimeoutMs: 120_000,
+  omoCommandStderrTailChars: 500,
 }

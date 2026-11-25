@@ -142,6 +142,18 @@ const CASES: readonly {
     message: "must be an integer >= 1",
   },
   {
+    name: "omoCommandTimeoutMs rejects zero",
+    jsonc: `{ "limits": { "omoCommandTimeoutMs": 0 } }`,
+    paths: ["limits.omoCommandTimeoutMs"],
+    message: "must be an integer",
+  },
+  {
+    name: "omoCommandStderrTailChars rejects zero",
+    jsonc: `{ "limits": { "omoCommandStderrTailChars": 0 } }`,
+    paths: ["limits.omoCommandStderrTailChars"],
+    message: "must be an integer",
+  },
+  {
     name: "omo.pluginRoot must be absolute",
     jsonc: `{ "omo": { "pluginRoot": "relative/plugin" } }`,
     paths: ["omo.pluginRoot"],

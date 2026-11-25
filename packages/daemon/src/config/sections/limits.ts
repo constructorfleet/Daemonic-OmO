@@ -110,5 +110,15 @@ export function readLimits(reader: Reader, raw: Record<string, unknown>): Limits
       raw.threadQueueTtlMs,
       DEFAULT_LIMITS.threadQueueTtlMs,
     ),
+    omoCommandTimeoutMs: reader.integer(
+      "limits.omoCommandTimeoutMs",
+      raw.omoCommandTimeoutMs,
+      DEFAULT_LIMITS.omoCommandTimeoutMs,
+    ),
+    omoCommandStderrTailChars: reader.integer(
+      "limits.omoCommandStderrTailChars",
+      raw.omoCommandStderrTailChars,
+      DEFAULT_LIMITS.omoCommandStderrTailChars,
+    ),
   }
 }

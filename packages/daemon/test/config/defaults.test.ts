@@ -65,6 +65,8 @@ describe("loadConfig defaults", () => {
         observerImageCacheBytes: 67_108_864,
         threadMessageMaxBytes: 1_048_576,
         threadQueueTtlMs: 86_400_000,
+        omoCommandTimeoutMs: 120_000,
+        omoCommandStderrTailChars: 500,
       },
       omo: { bin: TEST_OMO.bin, pluginRoot: TEST_OMO.pluginRoot },
     })
@@ -189,6 +191,19 @@ describe("loadConfig defaults", () => {
     const atFloor = await tempHome()
     await atFloor.writeConfig(`{ "limits": { "threadMessageMaxBytes": 1 } }`)
     expect((await load(atFloor.home)).config.limits.threadMessageMaxBytes).toBe(1)
+  })
+
+  test("omo command bounds parse from config.jsonc", async () => {
+    const home = await tempHome()
+    await home.writeConfig(`{
+      "limits": { "omoCommandTimeoutMs": 45000, "omoCommandStderrTailChars": 1200 }
+    }`)
+
+    const loaded = await load(home.home)
+
+    expect(loaded.config.limits.omoCommandTimeoutMs).toBe(45_000)
+    expect(loaded.config.limits.omoCommandStderrTailChars).toBe(1_200)
+    expect(loaded.config.limits.sessionTtlMs).toBe(43_200_000)
   })
 
   test("the home layout is private: 0700 directories, no database file yet", async () => {

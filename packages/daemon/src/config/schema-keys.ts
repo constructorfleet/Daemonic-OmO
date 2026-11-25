@@ -69,6 +69,8 @@ const ALLOWED_KEYS: Readonly<Record<string, readonly string[]>> = {
     "observerImageCacheBytes",
     "threadMessageMaxBytes",
     "threadQueueTtlMs",
+    "omoCommandTimeoutMs",
+    "omoCommandStderrTailChars",
   ],
   omo: ["bin", "pluginRoot"],
 }
