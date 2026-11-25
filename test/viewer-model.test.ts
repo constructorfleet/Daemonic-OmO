@@ -171,6 +171,21 @@ describe("viewer state", () => {
     expect(frame.list.lines.some((line) => line.includes("main-2") && line.includes("▸"))).toBe(true)
   })
 
+  test("#given nested subagents #when a main is expanded #then deeper rows keep their ancestor guides", () => {
+    const items: TaskTreeItem[] = [
+      mainItem(),
+      { ...taskItem("st_parent", "parent"), lastSibling: false },
+      { ...taskItem("st_child", "child", 2), lastSibling: true, ancestorLastSiblings: [false] },
+      taskItem("st_sibling", "sibling"),
+    ]
+    const transcript = transcriptOf([])
+    const state = updateViewer(initialViewerState(items), { type: "open" }, context(items, transcript))
+    const frame = projectViewer(state, makeData(items, transcript), viewport())
+    expect(frame.list.lines).toContain("  ├─✓ parent")
+    expect(frame.list.lines).toContain("  │ └─✓ child")
+    expect(frame.list.lines).toContain("  └─✓ sibling")
+  })
+
   test("#given a selected task #when it is opened and then backed out #then the view follows the selection and returns to main", () => {
     const items = [mainItem(), taskItem("st_a", "alpha")]
     const transcript = transcriptOf([])

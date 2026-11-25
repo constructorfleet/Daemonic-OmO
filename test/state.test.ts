@@ -37,16 +37,18 @@ describe("projectTaskTree", () => {
 
   test("#given nested subagents created out of order #when projected #then parents precede their children", () => {
     const rows = projectTaskTree([
-      record({ task_id: "grandchild", parent_session_id: "session-a", root_session_id: "main-1", created_at: "2026-11-21T12:00:01.000Z" }),
+      record({ task_id: "great-grandchild", parent_session_id: "session-b", root_session_id: "main-1", created_at: "2026-11-21T12:00:03.000Z" }),
+      record({ task_id: "grandchild", child_session_id: "session-b", parent_session_id: "session-a", root_session_id: "main-1", created_at: "2026-11-21T12:00:01.000Z" }),
       record({ task_id: "sibling", parent_session_id: "main-1", root_session_id: "main-1", created_at: "2026-11-21T12:00:02.000Z" }),
       record({ task_id: "parent", child_session_id: "session-a", parent_session_id: "main-1", root_session_id: "main-1", created_at: "2026-11-21T12:00:00.000Z" }),
     ])
 
-    expect(rows.map((row) => [row.id, row.depth, row.lastSibling])).toEqual([
-      ["main:main-1", 0, undefined],
-      ["parent", 1, false],
-      ["grandchild", 2, true],
-      ["sibling", 1, true],
+    expect(rows.map((row) => [row.id, row.depth, row.lastSibling, row.ancestorLastSiblings])).toEqual([
+      ["main:main-1", 0, undefined, undefined],
+      ["parent", 1, false, undefined],
+      ["grandchild", 2, true, [false]],
+      ["great-grandchild", 3, true, [false, true]],
+      ["sibling", 1, true, undefined],
     ])
   })
 

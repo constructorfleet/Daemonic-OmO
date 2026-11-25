@@ -564,7 +564,9 @@ function describeItem(
   }
   const task = item.task
   if (task === undefined) return []
-  const indent = "  ".repeat(Math.max(0, item.depth - 1))
+  const indent = item.ancestorLastSiblings === undefined
+    ? "  ".repeat(Math.max(0, item.depth - 1))
+    : item.ancestorLastSiblings.map((ancestorIsLast) => (ancestorIsLast ? "  " : "│ ")).join("")
   const branch = item.lastSibling === false ? "├─" : "└─"
   const continuation = item.lastSibling === false ? "│ " : "  "
   const name = safeText(task.name ?? task.task_summary ?? task.description ?? task.task_id)

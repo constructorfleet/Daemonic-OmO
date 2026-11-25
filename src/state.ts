@@ -24,6 +24,8 @@ export interface TaskTreeItem {
   readonly task?: TaskRecord
   /** For tasks: whether this is the last child at its depth, so the tree can close its branch. */
   readonly lastSibling?: boolean
+  /** For tasks: whether each ancestor is a last child, so deeper levels keep their vertical guides. */
+  readonly ancestorLastSiblings?: readonly boolean[]
 }
 
 export function decodeTaskRecord(value: unknown): TaskRecord | undefined {
@@ -72,18 +74,32 @@ export function projectTaskTree(records: readonly TaskRecord[]): readonly TaskTr
       (byParent.get(sessionId) ?? [])
         .filter((record) => inRootIds.has(record.task_id) && !seen.has(record.task_id))
         .toSorted(compareRecords)
-    const visit = (record: TaskRecord, depth: number, lastSibling: boolean): void => {
+    const visit = (
+      record: TaskRecord,
+      depth: number,
+      lastSibling: boolean,
+      ancestorLastSiblings: readonly boolean[],
+    ): void => {
       if (seen.has(record.task_id)) return
       seen.add(record.task_id)
-      items.push({ id: record.task_id, kind: "task", rootSessionId, depth, task: record, lastSibling })
+      items.push({
+        id: record.task_id,
+        kind: "task",
+        rootSessionId,
+        depth,
+        task: record,
+        lastSibling,
+        ...(ancestorLastSiblings.length === 0 ? {} : { ancestorLastSiblings }),
+      })
       const children = record.child_session_id === undefined ? [] : childrenOf(record.child_session_id)
-      children.forEach((child, index) => visit(child, depth + 1, index === children.length - 1))
+      const childAncestors = [...ancestorLastSiblings, lastSibling]
+      children.forEach((child, index) => visit(child, depth + 1, index === children.length - 1, childAncestors))
     }
     const top = childrenOf(rootSessionId)
-    top.forEach((record, index) => visit(record, 1, index === top.length - 1))
+    top.forEach((record, index) => visit(record, 1, index === top.length - 1, []))
     // Records whose parent session is missing still need to be reachable under their root.
     const orphans = inRoot.filter((record) => !seen.has(record.task_id)).toSorted(compareRecords)
-    orphans.forEach((record, index) => visit(record, 1, index === orphans.length - 1))
+    orphans.forEach((record, index) => visit(record, 1, index === orphans.length - 1, []))
   }
   return items
 }
