@@ -3,7 +3,7 @@ import { parseUlid } from "../../core/ids"
 import type { Loop } from "../../core/types"
 import type { EventLedger } from "../ledger"
 import { RepositoryDataError, RevisionConflictError } from "./errors"
-import { parseRecord } from "./json"
+import { parseJsonObject, parseRecord } from "./json"
 
 function isLoop(value: Record<string, unknown>): value is Record<string, unknown> & Loop {
   return typeof value.id === "string" && parseUlid(value.id) !== null &&
@@ -58,7 +58,7 @@ export function createLoopRepository(db: Database, ledger: EventLedger) {
           entityId: loop.id,
           userId: loop.userId,
           projectId: loop.projectId,
-          data: { id: loop.id, revision: loop.revision, state: loop.state },
+          data: parseJsonObject(JSON.stringify(loop), "loop"),
         })
       })
     },
@@ -81,7 +81,7 @@ export function createLoopRepository(db: Database, ledger: EventLedger) {
           entityId: loop.id,
           userId: loop.userId,
           projectId: loop.projectId,
-          data: { id: loop.id, revision: loop.revision, state: loop.state },
+          data: parseJsonObject(JSON.stringify(loop), "loop"),
         })
       })
     },

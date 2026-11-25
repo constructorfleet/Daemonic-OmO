@@ -3,7 +3,7 @@ import { parseUlid } from "../../core/ids"
 import type { Run } from "../../core/types"
 import type { EventLedger } from "../ledger"
 import { RepositoryDataError, RevisionConflictError } from "./errors"
-import { parseRecord } from "./json"
+import { parseJsonObject, parseRecord } from "./json"
 
 function isRun(value: Record<string, unknown>): value is Record<string, unknown> & Run {
   return typeof value.id === "string" && parseUlid(value.id) !== null &&
@@ -61,7 +61,7 @@ export function createRunRepository(db: Database, ledger: EventLedger) {
           entityId: run.id,
           userId: run.userId,
           projectId: run.projectId,
-          data: { id: run.id, revision: run.revision, state: run.state },
+          data: parseJsonObject(JSON.stringify(run), "run"),
         })
       })
     },
@@ -84,7 +84,7 @@ export function createRunRepository(db: Database, ledger: EventLedger) {
           entityId: run.id,
           userId: run.userId,
           projectId: run.projectId,
-          data: { id: run.id, revision: run.revision, state: run.state },
+          data: parseJsonObject(JSON.stringify(run), "run"),
         })
       })
     },

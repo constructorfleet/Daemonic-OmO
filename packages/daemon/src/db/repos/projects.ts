@@ -60,7 +60,7 @@ export function createProjectRepository(db: Database, ledger: EventLedger) {
           entityId: project.id,
           userId: project.userId,
           projectId: project.id,
-          data: { id: project.id, revision: project.revision },
+          data: { ...project },
         })
       })
     },
@@ -83,7 +83,7 @@ export function createProjectRepository(db: Database, ledger: EventLedger) {
           entityId: project.id,
           userId: project.userId,
           projectId: project.id,
-          data: { id: project.id, revision: project.revision },
+          data: { ...project },
         })
       })
     },

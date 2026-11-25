@@ -1,8 +1,9 @@
 import type { Database } from "bun:sqlite"
 import { parseUlid } from "../../core/ids"
 import type { User, UserRole, UserSettings } from "../../core/types"
+import type { EventLedger } from "../ledger"
 import { RepositoryDataError } from "./errors"
-import { parseRecord } from "./json"
+import { parseJsonObject, parseRecord } from "./json"
 
 type UserRow = {
   readonly id: string
@@ -73,7 +74,7 @@ function decodeUser(row: UserRow): User {
   }
 }
 
-export function createUserRepository(db: Database) {
+export function createUserRepository(db: Database, ledger: EventLedger) {
   return {
     get(id: User["id"]): User | null {
       const row = db.query<UserRow, [string]>("SELECT * FROM users WHERE id = ?").get(id)
@@ -86,29 +87,32 @@ export function createUserRepository(db: Database) {
       return row === null ? null : decodeUser(row)
     },
     put(user: User): void {
-      db.query(
-        `INSERT INTO users(id, oidc_issuer, oidc_sub, email, name, role, agent_dir,
-          allowed_roots_json, settings_json, created_at, updated_at, last_login_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-         ON CONFLICT(id) DO UPDATE SET oidc_issuer = excluded.oidc_issuer,
-          oidc_sub = excluded.oidc_sub, email = excluded.email, name = excluded.name,
-          role = excluded.role, agent_dir = excluded.agent_dir,
-          allowed_roots_json = excluded.allowed_roots_json, settings_json = excluded.settings_json,
-          updated_at = excluded.updated_at, last_login_at = excluded.last_login_at`,
-      ).run(
-        user.id,
-        user.oidcIssuer,
-        user.oidcSub,
-        user.email,
-        user.name,
-        user.role,
-        user.agentDir,
-        JSON.stringify(user.allowedRoots),
-        JSON.stringify(user.settings),
-        user.createdAt,
-        user.updatedAt,
-        user.lastLoginAt,
-      )
+      ledger.transact((transaction) => {
+        transaction.execute(
+          `INSERT INTO users(id, oidc_issuer, oidc_sub, email, name, role, agent_dir,
+            allowed_roots_json, settings_json, created_at, updated_at, last_login_at)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+           ON CONFLICT(id) DO UPDATE SET oidc_issuer = excluded.oidc_issuer,
+            oidc_sub = excluded.oidc_sub, email = excluded.email, name = excluded.name,
+            role = excluded.role, agent_dir = excluded.agent_dir,
+            allowed_roots_json = excluded.allowed_roots_json, settings_json = excluded.settings_json,
+            updated_at = excluded.updated_at, last_login_at = excluded.last_login_at`,
+          [
+            user.id, user.oidcIssuer, user.oidcSub, user.email, user.name, user.role, user.agentDir,
+            JSON.stringify(user.allowedRoots), JSON.stringify(user.settings), user.createdAt,
+            user.updatedAt, user.lastLoginAt,
+          ],
+        )
+        transaction.emit({
+          at: user.updatedAt,
+          type: "user.upserted",
+          entityKind: "user",
+          entityId: user.id,
+          userId: user.id,
+          projectId: null,
+          data: parseJsonObject(JSON.stringify(user), "user"),
+        })
+      })
     },
   }
 }

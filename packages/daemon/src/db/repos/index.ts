@@ -10,8 +10,9 @@ import { createSessionRepository } from "./sessions"
 import { createUserRepository } from "./users"
 
 export function createRepositories(db: Database, ledger = new EventLedger(db)) {
+  const userRepository = createUserRepository(db, ledger)
   return {
-    users: createUserRepository(db),
+    users: userRepository,
     sessions: createSessionRepository(db),
     projects: createProjectRepository(db, ledger),
     schedules: createScheduleRepository(db, ledger),

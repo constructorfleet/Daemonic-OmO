@@ -94,8 +94,8 @@ describe("daemon database", () => {
   test("assigns contiguous global and per-user sequences across mixed commits", () => {
     const db = testDb()
     migrate(db)
-    const repositories = createRepositories(db)
     const ledger = new EventLedger(db)
+    const repositories = createRepositories(db, ledger)
     const delivered: number[] = []
     ledger.subscribe((record) => {
       delivered.push(ledger.readAfter(record.seq - 1, 1)[0]?.seq ?? -1)
@@ -115,17 +115,17 @@ describe("daemon database", () => {
       })
     }
 
-    const events = ledger.readAfter(0, 1_000)
+    const events = ledger.readAfter(0, 1_100)
     expect(events.map(({ seq }) => seq)).toEqual(
-      Array.from({ length: 1_000 }, (_, index) => index + 1),
+      Array.from({ length: 1_003 }, (_, index) => index + 1),
     )
     for (const [userIndex, value] of users.entries()) {
       expect(events.filter((row) => row.userId === value.id).map(({ userSeq }) => userSeq))
-        .toEqual(Array.from({ length: 334 }, (_, index) => index + 1)
-          .slice(0, userIndex === 0 ? 334 : 333))
+        .toEqual(Array.from({ length: 335 }, (_, index) => index + 1)
+          .slice(0, userIndex === 0 ? 335 : 334))
     }
-    expect(delivered).toEqual(Array.from({ length: 1_000 }, (_, index) => index + 1))
-    console.log("QA happy: seq 1..1000 contiguous; per-user user_seq 1..334/333/333")
+    expect(delivered).toEqual(Array.from({ length: 1_003 }, (_, index) => index + 1))
+    console.log("QA happy: seq 1..1003 contiguous; per-user user_seq 1..335/334/334")
   })
 
   test("rolls back writes and emits no broadcasts when a transaction throws", () => {
@@ -136,6 +136,7 @@ describe("daemon database", () => {
     createRepositories(db).users.put(value)
     const broadcasts: DaemonEvent[] = []
     ledger.subscribe((record) => broadcasts.push(record))
+    const head = ledger.headSeq()
 
     expect(() => ledger.transact((transaction) => {
       transaction.execute("INSERT INTO audit(id, at, user_id, action, entity_kind, entity_id, detail_json) VALUES (?, ?, ?, ?, ?, ?, ?)", [
@@ -150,7 +151,7 @@ describe("daemon database", () => {
     })).toThrow("force rollback")
 
     expect(db.query("SELECT COUNT(*) AS count FROM audit").get()).toEqual({ count: 0 })
-    expect(ledger.readAfter(0, 10)).toEqual([])
+    expect(ledger.readAfter(head, 10)).toEqual([])
     expect(broadcasts).toEqual([])
     console.log("QA failure: throw after two inserts left rows=0 broadcasts=0")
   })
@@ -202,13 +203,13 @@ describe("daemon database", () => {
       now: "2026-04-02T00:00:00.000Z",
       eventRetentionDays: 30,
       eventRetentionMinRows: 2,
-    })).toBe(2)
+    })).toBe(3)
     expect(ledger.readAfter(0, 10).map(({ type }) => type)).toEqual([
       "event.2026-03-01T00:00:00.000Z",
       "event.2026-04-01T00:00:00.000Z",
     ])
     ledger.transact((transaction) => transaction.emit(event(userId, "event.after-prune", "2026-04-02T00:00:00.000Z")))
-    expect(ledger.readAfter(0, 10).at(-1)).toMatchObject({ seq: 5, userSeq: 5 })
+    expect(ledger.readAfter(0, 10).at(-1)).toMatchObject({ seq: 6, userSeq: 6 })
   })
 
   test("replays idempotency records and rejects changed request hashes", () => {

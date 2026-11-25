@@ -3,7 +3,7 @@ import { parseUlid } from "../../core/ids"
 import type { Schedule } from "../../core/types"
 import type { EventLedger } from "../ledger"
 import { RepositoryDataError, RevisionConflictError } from "./errors"
-import { parseRecord } from "./json"
+import { parseJsonObject, parseRecord } from "./json"
 
 function isSchedule(value: Record<string, unknown>): value is Record<string, unknown> & Schedule {
   return typeof value.id === "string" && parseUlid(value.id) !== null &&
@@ -58,7 +58,7 @@ export function createScheduleRepository(db: Database, ledger: EventLedger) {
           entityId: schedule.id,
           userId: schedule.userId,
           projectId: schedule.projectId,
-          data: { id: schedule.id, revision: schedule.revision },
+          data: parseJsonObject(JSON.stringify(schedule), "schedule"),
         })
       })
     },
@@ -81,7 +81,7 @@ export function createScheduleRepository(db: Database, ledger: EventLedger) {
           entityId: schedule.id,
           userId: schedule.userId,
           projectId: schedule.projectId,
-          data: { id: schedule.id, revision: schedule.revision },
+          data: parseJsonObject(JSON.stringify(schedule), "schedule"),
         })
       })
     },
