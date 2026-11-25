@@ -124,6 +124,24 @@ const CASES: readonly {
     message: "limits.observerImageCacheBytes",
   },
   {
+    name: "thread message cap must stay positive",
+    jsonc: `{ "limits": { "threadMessageMaxBytes": 0 } }`,
+    paths: ["limits.threadMessageMaxBytes"],
+    message: "between 1 and 1048576",
+  },
+  {
+    name: "thread message cap must not exceed the upstream 1 MiB ceiling",
+    jsonc: `{ "limits": { "threadMessageMaxBytes": 1048577 } }`,
+    paths: ["limits.threadMessageMaxBytes"],
+    message: "between 1 and 1048576",
+  },
+  {
+    name: "thread queue expiry must stay positive",
+    jsonc: `{ "limits": { "threadQueueTtlMs": 0 } }`,
+    paths: ["limits.threadQueueTtlMs"],
+    message: "must be an integer >= 1",
+  },
+  {
     name: "omo.pluginRoot must be absolute",
     jsonc: `{ "omo": { "pluginRoot": "relative/plugin" } }`,
     paths: ["omo.pluginRoot"],

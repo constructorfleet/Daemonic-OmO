@@ -77,6 +77,8 @@ export interface LimitsConfig {
   readonly observerMaxOlderTurns: number
   readonly observerPageMaxTurns: number
   readonly observerImageCacheBytes: number
+  readonly threadMessageMaxBytes: number
+  readonly threadQueueTtlMs: number
 }
 
 export interface OmoConfig {
@@ -150,4 +152,6 @@ export const DEFAULT_LIMITS: LimitsConfig = {
   observerMaxOlderTurns: 5_000,
   observerPageMaxTurns: 500,
   observerImageCacheBytes: 67_108_864,
+  threadMessageMaxBytes: 1_048_576,
+  threadQueueTtlMs: 86_400_000,
 }

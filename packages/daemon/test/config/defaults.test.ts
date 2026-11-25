@@ -63,6 +63,8 @@ describe("loadConfig defaults", () => {
         observerMaxOlderTurns: 5_000,
         observerPageMaxTurns: 500,
         observerImageCacheBytes: 67_108_864,
+        threadMessageMaxBytes: 1_048_576,
+        threadQueueTtlMs: 86_400_000,
       },
       omo: { bin: TEST_OMO.bin, pluginRoot: TEST_OMO.pluginRoot },
     })
@@ -166,6 +168,27 @@ describe("loadConfig defaults", () => {
       observerImageCacheBytes: 1_048_576,
     })
     expect(loaded.config.limits.sessionTtlMs).toBe(43_200_000)
+  })
+
+  test("limits overrides the thread message cap and queued expiry", async () => {
+    const home = await tempHome()
+    await home.writeConfig(`{ "limits": { "threadMessageMaxBytes": 2048, "threadQueueTtlMs": 60000 } }`)
+
+    const loaded = await load(home.home)
+
+    expect(loaded.config.limits.threadMessageMaxBytes).toBe(2048)
+    expect(loaded.config.limits.threadQueueTtlMs).toBe(60_000)
+    expect(loaded.config.limits.sessionTtlMs).toBe(43_200_000)
+  })
+
+  test("the thread message cap accepts one byte through the upstream 1 MiB ceiling", async () => {
+    const atCeiling = await tempHome()
+    await atCeiling.writeConfig(`{ "limits": { "threadMessageMaxBytes": 1048576 } }`)
+    expect((await load(atCeiling.home)).config.limits.threadMessageMaxBytes).toBe(1_048_576)
+
+    const atFloor = await tempHome()
+    await atFloor.writeConfig(`{ "limits": { "threadMessageMaxBytes": 1 } }`)
+    expect((await load(atFloor.home)).config.limits.threadMessageMaxBytes).toBe(1)
   })
 
   test("the home layout is private: 0700 directories, no database file yet", async () => {

@@ -1,6 +1,10 @@
 import type { Reader } from "../reader"
 import { DEFAULT_LIMITS, type LimitsConfig } from "../types"
 
+// omo itself refuses thread messages above 1 MiB, so config may lower the cap but never raise it.
+// DEFAULT_LIMITS.threadMessageMaxBytes equals this ceiling.
+const THREAD_MESSAGE_MAX_BYTES_CEILING = 1_048_576
+
 export function readLimits(reader: Reader, raw: Record<string, unknown>): LimitsConfig {
   return {
     sessionTtlMs: reader.integer("limits.sessionTtlMs", raw.sessionTtlMs, DEFAULT_LIMITS.sessionTtlMs),
@@ -94,6 +98,17 @@ export function readLimits(reader: Reader, raw: Record<string, unknown>): Limits
       "limits.observerImageCacheBytes",
       raw.observerImageCacheBytes,
       DEFAULT_LIMITS.observerImageCacheBytes,
+    ),
+    threadMessageMaxBytes: reader.integer(
+      "limits.threadMessageMaxBytes",
+      raw.threadMessageMaxBytes,
+      DEFAULT_LIMITS.threadMessageMaxBytes,
+      { max: THREAD_MESSAGE_MAX_BYTES_CEILING, maxLabel: "the upstream omo 1 MiB thread message limit" },
+    ),
+    threadQueueTtlMs: reader.integer(
+      "limits.threadQueueTtlMs",
+      raw.threadQueueTtlMs,
+      DEFAULT_LIMITS.threadQueueTtlMs,
     ),
   }
 }
