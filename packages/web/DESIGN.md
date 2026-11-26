@@ -51,9 +51,13 @@ Layout: Full-access confirmation - centered dialog over the project settings for
 
 Layout: Account menu - anchored action on wide screens and a bottom sheet on compact screens -> fixed-sidenav-shell; scroll owner: `main.workspace__content` on wide screens and `document` on compact screens; anti-patterns: no compact-width popover, no competing overlay.
 
+Layout: Sessions - task tree beside transcript detail -> fixed-sidenav-shell with a list-detail region (https://github.com/changeroa/StyleGallery/blob/main/patterns/viewport-shell/fixed-sidenav-shell.md); scroll owner: `main.workspace__content`; the todo list owns its bounded inner scroll; anti-patterns: no horizontal overflow, no competing transcript scroller, no hidden selected item.
+
 ## 4. Components
 
 `AppShell` owns primary navigation, the account menu, the compatibility status region, and the active route heading. `ProjectActivity` owns task counts, task rows, and the running-runs count for one project. `EmptyState` owns the title, current data state, and next-step guidance for a route. Each component uses the shared semantic tokens and native HTML controls.
+
+`SessionsExplorer` owns project selection and the main-session/task tree. `TodoPane` owns the selected session's latest todo report. `TranscriptPane` owns paged turn summaries, expanded turn bodies, and transcript images; all use the viewer-derived semantic color tokens.
 
 ## 5. Screen brief: application shell
 
@@ -105,6 +109,13 @@ Layout: Account menu - anchored action on wide screens and a bottom sheet on com
 - Information priorities: the loop-check command capability; its permission boundary.
 - Left out on purpose: an Enter-default confirmation or a second permission setting.
 - Required content: confirmation title and explanation, Confirm full access, Cancel, Escape dismissal, and focus return to the checkbox.
+
+## 5.7 Screen brief: sessions
+
+- Primary action: select a session or task to inspect its transcript.
+- Information priorities: project and root-session status counts; task ancestry, status and todo progress; the selected item's transcript and current turn.
+- Left out on purpose: run controls, graph navigation, duplicate summary cards, and fabricated session activity.
+- Required content: project selector; root-session rows with truncated ids and status counts; task names, ancestry, status glyphs and colors, elapsed time; completed/running/stopped filters that retain selected and viewed rows; TODO done/total, Now, Next, phase progress and item states; hide-completed control; task heading with status, start, elapsed, category, agent type, model and task id; main-session heading with id and status counts; assistant, thinking, tool, result, error and child-error rows; turn selection rail and count; expanded thinking and exact tool arguments; up to three image previews with size and MIME captions; follow-latest, older-turn paging and read-budget controls; event-log errors; session-file-gone state; keyboard controls for selection, expansion, filters, todo visibility, scrolling, follow, pause and refresh.
 
 ## 6. Interaction and accessibility
 

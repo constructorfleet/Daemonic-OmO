@@ -116,6 +116,19 @@ export function createApiClient(options: ApiClientOptions = {}) {
       return currentUser
     },
 
+    async updateUserSettings(input: { readonly readBytes: number }): Promise<{ readonly readBytes: number }> {
+      const headers = await csrfHeaders()
+      const value = await json(await request("/api/v1/me/settings", {
+        method: "PATCH",
+        headers,
+        body: JSON.stringify(input),
+      }))
+      if (!isRecord(value) || typeof value["readBytes"] !== "number" || !Number.isSafeInteger(value["readBytes"])) {
+        throw new TypeError("API user settings must include integer readBytes")
+      }
+      return { readBytes: value["readBytes"] }
+    },
+
     async health(): Promise<{ readonly version: string; readonly headSeq: number; readonly omo: unknown }> {
       const body = await json(await request("/api/v1/health"))
       if (!isRecord(body) || (!isRecord(body["omo"]) && body["omo"] !== null)) {
@@ -156,6 +169,26 @@ export function createApiClient(options: ApiClientOptions = {}) {
     async getProjectTaskDocument(projectId: string): Promise<ProjectTaskDocument> {
       const docId = `project:${projectId}:tasks`
       return parseProjectTaskDocument(await json(await request(`/api/v1/docs/${encodeURIComponent(docId)}`)))
+    },
+
+    async getDocument(docId: string, options: { readonly beforeTurn?: string; readonly limit?: number } = {}): Promise<unknown> {
+      const query = new URLSearchParams()
+      if (options.beforeTurn !== undefined) query.set("beforeTurn", options.beforeTurn)
+      if (options.limit !== undefined) query.set("limit", String(options.limit))
+      const suffix = query.size === 0 ? "" : `?${query}`
+      return json(await request(`/api/v1/docs/${encodeURIComponent(docId)}${suffix}`))
+    },
+
+    async getTurnBody(docId: string, turnId: string): Promise<unknown> {
+      return json(await request(
+        `/api/v1/docs/${encodeURIComponent(docId)}/turns/${encodeURIComponent(turnId)}`,
+      ))
+    },
+
+    async getDocumentImage(docId: string, sha256: string): Promise<Blob> {
+      return request(
+        `/api/v1/docs/${encodeURIComponent(docId)}/images/${encodeURIComponent(sha256)}`,
+      ).then((response) => response.blob())
     },
 
     async listProjectRunningRuns(projectId: string): Promise<readonly ProjectRunSummary[]> {

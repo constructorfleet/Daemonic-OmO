@@ -3,21 +3,18 @@
 //   bun packages/daemon/test/support/e2e-server.ts [--fixtures <agent-dir tree>] [--port <n>]
 // It prints one JSON line {ready, url, home, agentDir, issuer} once listening.
 // With OMO_DAEMONIC_E2E=1 it also serves the /__test/* control routes.
-import { appendFile, cp, mkdir, mkdtemp, rm, writeFile } from "node:fs/promises"
+import { cp, mkdir, mkdtemp, rm, writeFile } from "node:fs/promises"
 import { tmpdir } from "node:os"
-import { dirname, join, resolve, sep } from "node:path"
+import { join, resolve } from "node:path"
 import { parseArgs } from "node:util"
 import type { Server } from "bun"
-import { ApiError, knownErrorResponse } from "../../src/api/errors"
-import { json, Router } from "../../src/api/routes"
 import { startServer, type FetchHandler } from "../../src/api/server"
 import { createApp, type App } from "../../src/app"
 import { loadConfig, systemRng } from "../../src/config"
 import { isPlainObject } from "../../src/config/reader"
-import { threadId } from "../../src/core/ids"
-import type { ThreadState } from "../../src/core/ports"
 import { CLIENT_ID, MockIdp } from "../auth/harness"
 import { FakeClock, FakeFs, FakeGateway, FakeGit } from "./fakes"
+import { createE2eControlHandler } from "./e2e-control"
 
 export interface E2eServerOptions {
   readonly fixtures?: string
@@ -42,7 +39,6 @@ export interface E2eServer {
 }
 
 export const E2E_ADMIN_SUB = "e2e-admin"
-const THREAD_STATES: readonly ThreadState[] = ["running", "idle", "inactive"]
 
 function merge(base: Record<string, unknown>, overrides: Readonly<Record<string, unknown>>): Record<string, unknown> {
   const merged = { ...base }
@@ -51,89 +47,6 @@ function merge(base: Record<string, unknown>, overrides: Readonly<Record<string,
     merged[key] = isPlainObject(current) && isPlainObject(value) ? { ...current, ...value } : value
   }
   return merged
-}
-
-function bodyRecord(body: unknown): Record<string, unknown> {
-  if (!isPlainObject(body)) throw new ApiError("invalid_arguments", "body must be a JSON object")
-  return body
-}
-
-function controlRouter(target: { clock: FakeClock; gateway: FakeGateway; agentDir: string; app: App }): Router {
-  const router = new Router()
-  const read = async (request: Request): Promise<Record<string, unknown>> => bodyRecord(await request.json())
-  router.add({
-    method: "POST",
-    path: "/__test/stream/close",
-    handle: () => {
-      target.app.hub.closeAll()
-      return new Response(null, { status: 204 })
-    },
-  })
-  router.add({
-    method: "POST",
-    path: "/__test/clock/advance",
-    handle: async (request) => {
-      const { ms } = await read(request)
-      if (typeof ms !== "number" || !Number.isSafeInteger(ms) || ms < 0) {
-        throw new ApiError("invalid_arguments", "ms must be a non-negative integer")
-      }
-      target.clock.advance(ms)
-      return json({ now: target.clock.now() })
-    },
-  })
-  router.add({
-    method: "POST",
-    path: "/__test/gateway/threads",
-    handle: async (request) => {
-      const { name, cwd } = await read(request)
-      const thread = target.gateway.seedThread({
-        ...(typeof name === "string" ? { name } : {}),
-        ...(typeof cwd === "string" ? { cwd } : {}),
-      })
-      return json({ thread }, 201)
-    },
-  })
-  router.add({
-    method: "POST",
-    path: "/__test/gateway/threads/:thread/state",
-    handle: async (request, _peer, params) => {
-      const { state } = await read(request)
-      const parsed = THREAD_STATES.find((candidate) => candidate === state)
-      if (parsed === undefined) throw new ApiError("invalid_arguments", `state must be one of ${THREAD_STATES.join(", ")}`)
-      target.gateway.setThreadState(threadId(params.thread ?? ""), parsed)
-      return new Response(null, { status: 204 })
-    },
-  })
-  router.add({
-    method: "POST",
-    path: "/__test/fixtures/append",
-    handle: async (request) => {
-      const { path, line } = await read(request)
-      if (typeof path !== "string" || typeof line !== "string") {
-        throw new ApiError("invalid_arguments", "body must be {path, line}")
-      }
-      const file = resolve(target.agentDir, path)
-      if (!file.startsWith(target.agentDir + sep)) throw new ApiError("invalid_arguments", "path must stay inside the fixture tree")
-      await mkdir(dirname(file), { recursive: true })
-      await appendFile(file, `${line}\n`)
-      return new Response(null, { status: 204 })
-    },
-  })
-  return router
-}
-
-function controlHandler(router: Router): (request: Request) => Promise<Response> {
-  return async (request) => {
-    try {
-      const matched = router.match(request.method, new URL(request.url).pathname)
-      if (matched === null) throw new ApiError("not_found", "unknown control route")
-      return await matched.route.handle(request, "", matched.params)
-    } catch (error) {
-      const known = knownErrorResponse(error)
-      if (known === null) throw error
-      return known
-    }
-  }
 }
 
 export async function startE2eServer(options: E2eServerOptions = {}): Promise<E2eServer> {
@@ -192,7 +105,7 @@ export async function startE2eServer(options: E2eServerOptions = {}): Promise<E2
       ...(options.staticDir === undefined ? {} : { staticDir: options.staticDir }),
     })
     app = created
-    const control = controlsEnabled ? controlHandler(controlRouter({ clock, gateway, agentDir, app: created })) : null
+    const control = controlsEnabled ? createE2eControlHandler({ clock, gateway, agentDir, app: created }) : null
     handler = (request, bunServer) => control !== null && new URL(request.url).pathname.startsWith("/__test/")
       ? control(request)
       : created.fetch(request, bunServer)

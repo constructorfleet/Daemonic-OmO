@@ -7,11 +7,12 @@ import { ApiError, createApiClient } from "../lib/api"
 import type { DiscoveredProject, Project, ProjectListItem } from "../lib/api"
 import { ProjectActivity } from "../lib/project-activity"
 import { ProjectSettingsForm } from "../lib/project-settings-form"
+import type { ProjectsApi } from "../lib/projects-api"
 import { PROJECTS_QUERY_KEY, createStreamStore } from "../lib/stream"
 import type { StreamStoreOptions } from "../lib/stream"
 import { isRecord } from "../lib/api-model"
 
-export type ProjectsApi = ReturnType<typeof createApiClient>
+export type { ProjectsApi } from "../lib/projects-api"
 
 type ProjectsPageProps = {
   readonly api?: ProjectsApi

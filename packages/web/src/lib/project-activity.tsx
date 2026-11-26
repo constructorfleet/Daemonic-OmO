@@ -1,7 +1,7 @@
 import { useEffect, useRef } from "react"
 import { useQuery } from "@tanstack/react-query"
 import type { Project } from "./api-model"
-import type { ProjectTaskItem } from "./project-activity-model"
+import { assertNever } from "./project-activity-model"
 import { projectTaskDocumentQueryKey } from "./project-task-stream"
 import type { createApiClient } from "./api-client"
 import type { createStreamStore } from "./stream"
@@ -46,8 +46,17 @@ export function ProjectActivity({ project, api, stream }: ProjectActivityProps) 
     void stream.unsubscribeDoc(docId)
   }, [docId, stream])
 
-  const tasks = taskDocument.data?.snapshot.items.flatMap((item) =>
-    item.kind === "task" && item.task !== undefined ? [{ ...item, task: item.task }] : [])
+  const tasks = taskDocument.data?.snapshot.items.flatMap((item) => {
+    switch (item.kind) {
+      case "main":
+      case "run":
+        return []
+      case "task":
+        return [item]
+      default:
+        return assertNever(item)
+    }
+  })
   const runningTasks = tasks?.filter(({ task }) =>
     task.status === "running" || task.status === "pending" || task.status === "scheduled").length ?? 0
   const completedTasks = tasks?.filter(({ task }) => task.status === "completed").length ?? 0
@@ -80,7 +89,7 @@ export function ProjectActivity({ project, api, stream }: ProjectActivityProps) 
       </p>
       {tasks !== undefined && tasks.length > 0 && (
         <ul className="m-0 grid list-none gap-1 p-0" aria-label={`${project.name} tasks`}>
-          {tasks.map((item: ProjectTaskItem & { readonly task: NonNullable<ProjectTaskItem["task"]> }) => {
+          {tasks.map((item) => {
             const name = item.task.name ?? item.task.task_summary ?? item.task.description ?? item.task.task_id
             return (
               <li

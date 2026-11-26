@@ -1,0 +1,2 @@
+{"type":"session","version":3,"id":"qa-child-session","cwd":"/tmp/parity-fixture"}
+{"type":"message","id":"child-turn-1","message":{"role":"assistant","content":[{"type":"text","text":"Child task transcript fixture."}]}}

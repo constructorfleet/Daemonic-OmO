@@ -19,7 +19,10 @@ export interface StreamStoreOptions {
   readonly queryClient: QueryClient
   readonly api: StreamApi
   readonly eventSourceFactory?: (url: string) => StreamEventSource
+  readonly documentPaused?: () => boolean
 }
+
+export type DocumentFrameListener = (frame: unknown) => void
 
 type ProjectListResponse = {
   readonly items: readonly ProjectListItem[]
@@ -121,6 +124,7 @@ function applyEntity(queryClient: QueryClient, frame: EntityFrame): void {
 export function createStreamStore(options: StreamStoreOptions) {
   const eventSourceFactory = options.eventSourceFactory ?? ((url: string) => new EventSource(url))
   const documents = new Map<string, DocSubscription>()
+  const documentListeners = new Map<string, Set<DocumentFrameListener>>()
   let source: StreamEventSource | null = null
   let streamId: string | null = null
   let cursor = 0
@@ -167,9 +171,18 @@ export function createStreamStore(options: StreamStoreOptions) {
     })
     current.addEventListener("doc", (event) => {
       if (source !== current) return
-      const frame = parseProjectTaskDocumentFrame(parseEventData(event))
+      if (options.documentPaused?.() === true) return
+      const data = parseEventData(event)
+      const docId = isRecord(data) && typeof data["docId"] === "string" ? data["docId"] : undefined
+      if (docId !== undefined) {
+        for (const listener of documentListeners.get(docId) ?? []) listener(data)
+      }
+      const frame = parseProjectTaskDocumentFrame(data)
       if (frame === null) {
-        options.queryClient.invalidateQueries()
+        if (docId === undefined) options.queryClient.invalidateQueries()
+        else if (docId.startsWith("project:") && docId.endsWith(":tasks")) {
+          options.queryClient.invalidateQueries({ queryKey: ["docs", docId] })
+        }
         return
       }
       if (!applyProjectTaskDocumentFrame(options.queryClient, frame)) return
@@ -214,6 +227,16 @@ export function createStreamStore(options: StreamStoreOptions) {
       ) return
       documents.set(subscription.docId, subscription)
       if (streamId !== null) await options.api.subscribeDoc(streamId, subscription)
+    },
+
+    listenDoc(docId: string, listener: DocumentFrameListener): () => void {
+      const listeners = documentListeners.get(docId) ?? new Set<DocumentFrameListener>()
+      listeners.add(listener)
+      documentListeners.set(docId, listeners)
+      return () => {
+        listeners.delete(listener)
+        if (listeners.size === 0) documentListeners.delete(docId)
+      }
     },
 
     async unsubscribeDoc(docId: string): Promise<void> {

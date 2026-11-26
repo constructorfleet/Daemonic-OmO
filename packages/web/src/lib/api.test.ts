@@ -82,6 +82,54 @@ describe("web API client", () => {
     expect(redirects).toEqual(["/auth/login"])
   })
 
+  it("preserves the signed-in user's configured transcript read budget", async () => {
+    const client = createApiClient({
+      fetcher: async () => Response.json({
+        user: {
+          id: "user-1",
+          name: "Ari",
+          email: "ari@example.test",
+          role: "member",
+          settings: { readBytes: 65_536 },
+        },
+        role: "member",
+        csrfToken: null,
+      }),
+      redirect: () => {},
+    })
+
+    const identity = await client.me()
+
+    expect(identity.user.settings?.readBytes).toBe(65_536)
+  })
+
+  it("updates the user's transcript read budget with CSRF protection", async () => {
+    const requests: { readonly url: string; readonly init: RequestInit | undefined }[] = []
+    const client = createApiClient({
+      fetcher: async (input, init) => {
+        const url = String(input)
+        requests.push({ url, init })
+        if (url === "/api/v1/me") {
+          return Response.json({
+            user: { id: "user-1", name: "Ari", email: "ari@example.test", role: "member" },
+            role: "member",
+            csrfToken: "csrf-1",
+          })
+        }
+        return Response.json({ readBytes: 65_536 })
+      },
+      redirect: () => {},
+    })
+
+    const settings = await client.updateUserSettings({ readBytes: 131_072 })
+
+    expect(settings).toEqual({ readBytes: 65_536 })
+    expect(requests[1]?.url).toBe("/api/v1/me/settings")
+    expect(requests[1]?.init?.method).toBe("PATCH")
+    expect(requests[1]?.init?.body).toBe(JSON.stringify({ readBytes: 131_072 }))
+    expect(new Headers(requests[1]?.init?.headers).get("X-CSRF-Token")).toBe("csrf-1")
+  })
+
   it("sends document subscribe and unsubscribe requests with mutation headers", async () => {
     const requests: { readonly url: string; readonly init: RequestInit | undefined }[] = []
     const client = createApiClient({

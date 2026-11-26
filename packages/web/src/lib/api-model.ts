@@ -68,6 +68,9 @@ export type CurrentUser = {
   readonly name: string
   readonly email: string
   readonly role: "admin" | "member"
+  readonly settings?: {
+    readonly readBytes?: number
+  }
 }
 
 export type MeResponse = {
@@ -154,12 +157,18 @@ export function parseMe(value: unknown): MeResponse {
   if (csrfToken !== null && typeof csrfToken !== "string") {
     throw new TypeError("API /me csrfToken must be a string or null")
   }
+  const settings = user["settings"]
+  const readBytes = isRecord(settings) ? settings["readBytes"] : undefined
+  if (readBytes !== undefined && (typeof readBytes !== "number" || !Number.isSafeInteger(readBytes))) {
+    throw new TypeError("API /me user.settings.readBytes must be an integer")
+  }
   return {
     user: {
       id: requiredString(user, "id"),
       name: requiredString(user, "name"),
       email: requiredString(user, "email"),
       role,
+      ...(typeof readBytes === "number" ? { settings: { readBytes } } : {}),
     },
     role,
     csrfToken,
