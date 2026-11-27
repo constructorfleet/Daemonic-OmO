@@ -1,11 +1,11 @@
 import type { Reader } from "../reader"
-import { DEFAULT_LIMITS, type LimitsConfig } from "../types"
+import { DEFAULT_LIMITS, type HardCapsConfig, type LimitsConfig } from "../types"
 
 // omo itself refuses thread messages above 1 MiB, so config may lower the cap but never raise it.
 // DEFAULT_LIMITS.threadMessageMaxBytes equals this ceiling.
 const THREAD_MESSAGE_MAX_BYTES_CEILING = 1_048_576
 
-export function readLimits(reader: Reader, raw: Record<string, unknown>): LimitsConfig {
+export function readLimits(reader: Reader, raw: Record<string, unknown>, hardCaps: HardCapsConfig): LimitsConfig {
   return {
     sessionTtlMs: reader.integer("limits.sessionTtlMs", raw.sessionTtlMs, DEFAULT_LIMITS.sessionTtlMs),
     eventRetentionDays: reader.integer(
@@ -53,6 +53,7 @@ export function readLimits(reader: Reader, raw: Record<string, unknown>): Limits
       "limits.loopCheckTimeoutMs",
       raw.loopCheckTimeoutMs,
       DEFAULT_LIMITS.loopCheckTimeoutMs,
+      { max: hardCaps.loopCheckTimeoutMs, maxLabel: "hardCaps.loopCheckTimeoutMs" },
     ),
     observerActivePollMs: reader.integer(
       "limits.observerActivePollMs",

@@ -3,7 +3,7 @@ import type { RunId, ThreadId } from "../core/types"
 import { auditRun } from "./audit"
 import { armRun, expireRun, finishRun, loseRun, requireProject, settleRun, startRun, type EngineCore } from "./lifecycle"
 import { orphanChildren } from "./termination"
-import { endsWithAssistant, findSessionFile, transcriptContains } from "./session-files"
+import { endsWithAssistant, findSessionFile, transcriptContainsSince } from "./session-files"
 
 /** Engine input that releases an `unattended` hold when the session already holds the run prompt. */
 export const RESUME_TEXT = "Resume the interrupted task."
@@ -36,7 +36,12 @@ async function releaseHold(core: EngineCore, id: RunId): Promise<void> {
   if (state.kind === "error" || !state.value.held) return
   const project = requireProject(core, run)
   const file = run.sessionFile ?? await findSessionFile(core.fs, project.agentDir, run.threadId)
-  const delivered = file !== null && await transcriptContains(core.fs, file, run.spec.prompt, core.readBytes)
+  const delivered = file !== null && await transcriptContainsSince(core.fs, {
+    file,
+    text: run.spec.prompt,
+    baseline: run.transcriptBaselineBytes ?? 0,
+    maxBytes: core.readBytes,
+  })
   const text = delivered ? RESUME_TEXT : run.spec.prompt
   const released = await core.gateway.releaseHold(run.threadId, text)
   if (released.kind === "error") {
@@ -98,10 +103,26 @@ export async function recoverRuns(core: EngineCore): Promise<void> {
 async function recloseResurrected(core: EngineCore, listing: NonNullable<Listing>): Promise<void> {
   const live = [...listing.values()].filter((snapshot) => snapshot.state !== "inactive").map((snapshot) => snapshot.thread)
   for (const run of core.records.closedOnThreads(live)) {
-    if (run.threadId === undefined) continue
-    const closed = await core.gateway.close({ thread: run.threadId, graceful: true, waitMs: core.waits.unattendedCloseMs })
-    if (closed.kind === "error") core.report(new RunRecoveryError(run.id, "reclose", `${closed.code}: ${closed.message}`))
+    await core.serial(run.id, () => recloseClosedRun(core, run.id))
   }
+}
+
+async function recloseClosedRun(core: EngineCore, id: RunId): Promise<void> {
+  const run = core.records.require(id)
+  if (run.state !== "closed" || run.threadId === undefined || core.records.activeByThread(run.threadId) !== null) return
+  const pending = run.closePending === true ? run : core.records.patch(run, { closePending: true })
+  const closed = await core.gateway.close({
+    thread: pending.threadId ?? run.threadId,
+    graceful: true,
+    waitMs: core.waits.unattendedCloseMs,
+  })
+  if (closed.kind === "error" || (!closed.value.closed && closed.value.reason !== "not_live")) {
+    const detail = closed.kind === "error" ? `${closed.code}: ${closed.message}` : `close answered ${closed.value.reason}`
+    core.report(new RunRecoveryError(id, "reclose", detail))
+    return
+  }
+  core.records.patch(core.records.require(id), { closePending: false })
+  core.requestDispatch()
 }
 
 async function superviseActive(core: EngineCore, id: RunId, listing: Listing): Promise<void> {
@@ -120,7 +141,11 @@ async function superviseActive(core: EngineCore, id: RunId, listing: Listing): P
   const file = run.sessionFile ?? await findSessionFile(core.fs, project.agentDir, run.threadId)
   if (file === null) return
   const current = run.sessionFile === undefined ? core.records.patch(run, { sessionFile: file }) : run
-  if (snapshot?.state === "idle" && await endsWithAssistant(core.fs, file)) {
+  if (snapshot?.state === "idle" && await endsWithAssistant(core.fs, {
+    file,
+    baseline: current.transcriptBaselineBytes ?? 0,
+    maxBytes: core.readBytes,
+  })) {
     await settleRun(core, current.id, { kind: "succeeded" })
   }
 }
@@ -134,6 +159,11 @@ export async function superviseRuns(core: EngineCore): Promise<void> {
   if (active.length > 0) {
     const listing = await listThreads(core)
     for (const run of active) await core.serial(run.id, () => superviseActive(core, run.id, listing))
+  }
+  const evaluating = core.records.unfinished().filter((run) => run.state === "evaluating")
+  for (const run of evaluating) await core.serial(run.id, () => finishRun(core, run.id))
+  for (const run of core.records.closedWithPendingClose()) {
+    await core.serial(run.id, () => recloseClosedRun(core, run.id))
   }
   for (const run of core.records.withOrphans()) {
     await core.serial(run.id, async () => {

@@ -2,12 +2,13 @@ import { join } from "node:path"
 
 import type { Repositories } from "../auth/types"
 import { sessionId as toSessionId } from "../core/ids"
-import { GitError, type Clock, type CreateThreadArgs, type CreateOutcome, type Fs, type Gateway, type GatewayErrorCode, type GatewayResult, type Git, type TimerHandle } from "../core/ports"
-import type { CancelReason, Ms, Project, Run, RunFailureReason, RunId, User } from "../core/types"
+import { GitError, type Clock, type Fs, type Gateway, type Git, type TimerHandle } from "../core/ports"
+import type { CancelReason, Ms, Project, Run, RunId, User } from "../core/types"
 import type { AuditDeps } from "./audit"
 import { auditRun } from "./audit"
 import type { RunRecords } from "./records"
 import { findSessionFile } from "./session-files"
+import { continueRunThread, createRunThread, failureReason } from "./startup"
 import { isFinished, type EndOutcome, type SettleOutcome } from "./state-machine"
 import { orphanChildren, stopThread } from "./termination"
 import { ensureWorktree } from "./worktree"
@@ -22,7 +23,8 @@ export interface EngineWaits {
 }
 
 /** Called once per settled loop iteration before its thread is closed (todo 18 registers it). */
-export type Evaluator = (run: Run) => Promise<void>
+/** True keeps a continue-mode loop thread open for the next iteration. */
+export type Evaluator = (run: Run) => Promise<boolean>
 
 export interface CancelResult {
   readonly run: Run
@@ -74,33 +76,6 @@ export function requireProject(core: EngineCore, run: Run): Project {
   return project
 }
 
-const TRANSIENT: readonly GatewayErrorCode[] = ["bridge_restarted", "bridge_timeout"]
-
-function failureReason(code: GatewayErrorCode): RunFailureReason {
-  if (code === "host_unavailable") return "host_unavailable"
-  return code === "sdk_unavailable" || code === "gateway_degraded" ? "gateway_degraded" : "create_refused"
-}
-
-/** `create` under the fire key; on `host_unavailable` the host is ensured once and the create retried once. */
-async function createThread(core: EngineCore, run: Run, project: Project): Promise<GatewayResult<CreateOutcome>> {
-  const args: CreateThreadArgs = {
-    name: run.name,
-    cwd: run.cwd,
-    prompt: run.spec.prompt,
-    idempotencyKey: `${run.fireKey}:${run.attempt}`,
-    ...(run.spec.model === undefined ? {} : { model: run.spec.model }),
-    ...(run.spec.thinking === undefined ? {} : { reasoning: run.spec.thinking }),
-  }
-  const first = await core.gateway.create(args)
-  if (first.kind === "ok") return first
-  if (first.code === "host_unavailable") {
-    const ensured = await core.gateway.ensureHost({ agentDir: project.agentDir })
-    if (ensured.kind === "error") return { ...first, message: `${first.message}; ensureHost ${ensured.code}: ${ensured.message}` }
-    return core.gateway.create(args)
-  }
-  return TRANSIENT.includes(first.code) ? core.gateway.create(args) : first
-}
-
 function end(core: EngineCore, run: Run, outcome: EndOutcome, patch: Parameters<RunRecords["step"]>[2] = {}): Run {
   clearTimeout(core, run.id)
   const ended = core.records.step(run, { kind: "end", outcome }, patch)
@@ -131,13 +106,21 @@ export async function startRun(core: EngineCore, id: RunId): Promise<void> {
       return
     }
   }
-  const answer = await createThread(core, run, project)
+  const answer = run.threadId === undefined
+    ? await createRunThread(core, run, project)
+    : await continueRunThread(core, run, project)
   const latest = core.records.require(id)
   if (answer.kind === "error") {
     end(core, latest, { kind: "failed", reason: failureReason(answer.code) }, { errorDetail: `${answer.code}: ${answer.message}` })
     return
   }
-  const identity = { threadId: answer.value.thread, sessionId: answer.value.sessionId ?? toSessionId(answer.value.thread) }
+  const identity = {
+    threadId: answer.value.thread,
+    sessionId: answer.value.sessionId ?? toSessionId(answer.value.thread),
+    ...(run.loopId !== undefined && run.threadId !== undefined && run.threadId !== answer.value.thread
+      ? { sessionFile: null, transcriptBaselineBytes: 0 }
+      : {}),
+  }
   const lateCancel = core.pendingCancel.get(id)
   if (lateCancel !== undefined) {
     await stopAndEnd(core, core.records.patch(latest, { ...identity, cancelRequested: true, cancelReason: lateCancel }), { kind: "cancelled" })
@@ -150,10 +133,16 @@ export async function armRun(core: EngineCore, run: Run): Promise<void> {
   if (run.threadId === undefined) return
   const project = requireProject(core, run)
   const file = run.sessionFile ?? await findSessionFile(core.fs, project.agentDir, run.threadId)
-  const current = file !== null && run.sessionFile === undefined ? core.records.patch(run, { sessionFile: file }) : run
-  await core.gateway.bindCompletion({ thread: run.threadId, events: ["completion"] })
-  armTimeout(core, current)
+  const baseline = file === null ? 0 : (await core.fs.stat(file)).size
+  const current = core.records.patch(run, {
+    ...(file !== null && run.sessionFile === undefined ? { sessionFile: file } : {}),
+    ...(run.transcriptBaselineBytes === undefined ? { transcriptBaselineBytes: baseline } : {}),
+  })
+  const binding = await core.gateway.bindCompletion({ thread: run.threadId, events: ["completion"] })
+  if (binding.kind === "ok") core.records.patch(current, { completionBindingId: binding.value.bindingId })
+  else core.report(binding)
   core.requestDispatch()
+  armTimeout(core, core.records.require(run.id))
 }
 
 function armTimeout(core: EngineCore, run: Run): void {
@@ -196,6 +185,12 @@ export async function cancelRun(core: EngineCore, id: RunId, reason: CancelReaso
   const run = core.records.require(id)
   if (isFinished(run.state)) return { run, uninterruptible: false }
   auditRun(core.audit, { action: "run.cancel", run, detail: { actorId: actor.id, reason } })
+  if (run.state === "queued") {
+    return {
+      run: end(core, run, { kind: "cancelled" }, { cancelRequested: true, cancelReason: reason }),
+      uninterruptible: false,
+    }
+  }
   return stopAndEnd(core, core.records.patch(run, { cancelRequested: true, cancelReason: reason }), { kind: "cancelled" })
 }
 
@@ -212,12 +207,21 @@ export async function finishRun(core: EngineCore, id: RunId): Promise<void> {
   const run = settled.state === "settled" ? core.records.step(settled, { kind: "evaluate" }) : settled
   if (run.state !== "evaluating") return
   const evaluator = core.evaluator()
-  if (run.loopId !== undefined && evaluator !== null) await evaluator(run)
+  const loopRun = run.loopId !== undefined && evaluator !== null
+  const keepThreadOpen = loopRun
+    ? run.loopEvaluationDone === true
+      ? run.loopKeepThreadOpen === true
+      : await evaluator(run)
+    : false
+  if (loopRun && run.loopEvaluationDone !== true) {
+    core.records.patch(run, { loopEvaluationDone: true, loopKeepThreadOpen: keepThreadOpen })
+  }
   const unattended = run.scheduleId !== undefined || run.loopId !== undefined
-  if (unattended && run.threadId !== undefined) {
+  if (unattended && !keepThreadOpen && run.threadId !== undefined) {
     const closed = await core.gateway.close({ thread: run.threadId, graceful: true, waitMs: core.waits.unattendedCloseMs })
-    if (closed.kind === "error") {
-      core.report(new RunCloseError(id, `${closed.code}: ${closed.message}`))
+    if (closed.kind === "error" || (!closed.value.closed && closed.value.reason !== "not_live")) {
+      const detail = closed.kind === "error" ? `${closed.code}: ${closed.message}` : `close answered ${closed.value.reason}`
+      core.report(new RunCloseError(id, detail))
       return
     }
   }

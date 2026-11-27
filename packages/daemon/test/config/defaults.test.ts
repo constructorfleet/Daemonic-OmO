@@ -28,6 +28,12 @@ describe("loadConfig defaults", () => {
         maxRunningPerProject: 1,
         loopMaxIterations: 10,
         loopMaxWallMs: 14_400_000,
+        loopMaxConsecutiveFailures: 3,
+        loopCadenceMs: 0,
+        loopBackoffInitialMs: 1_000,
+        loopBackoffFactor: 2,
+        loopBackoffMaxMs: 60_000,
+        loopCarryForwardBytes: 8_192,
         runTimeoutMs: 7_200_000,
         overlap: "skip",
         misfire: "fire_once",
@@ -44,6 +50,12 @@ describe("loadConfig defaults", () => {
         maxRunningPerProject: 16,
         loopMaxIterations: 100,
         loopMaxWallMs: 172_800_000,
+        loopMaxConsecutiveFailures: 100,
+        loopCheckTimeoutMs: 7_200_000,
+        loopCadenceMs: 172_800_000,
+        loopBackoffMs: 172_800_000,
+        loopBackoffFactor: 100,
+        loopCarryForwardBytes: 65_536,
         runTimeoutMs: 86_400_000,
         readBytes: 67_108_864,
       },
@@ -101,8 +113,16 @@ describe("loadConfig defaults", () => {
       // JSONC comments and trailing commas are allowed.
       "listen": { "host": "127.0.0.1", "port": 9123 },
       "users": { "allowSelfSignup": true },
-      "defaults": { "maxRunning": 5, "overlap": "queue" },
-      "limits": { "schedulePreviewMaxCount": 24 },
+      "defaults": {
+        "maxRunning": 5,
+        "overlap": "queue",
+        "loopMaxConsecutiveFailures": 8,
+        "loopCadenceMs": 250,
+        "loopBackoffFactor": 3,
+        "loopCarryForwardBytes": 4096
+      },
+      "hardCaps": { "loopMaxConsecutiveFailures": 20, "loopCheckTimeoutMs": 1200000 },
+      "limits": { "schedulePreviewMaxCount": 24, "loopCheckTimeoutMs": 900000 },
       "trustedProxies": ["10.0.0.2"],
     }`)
 
@@ -120,7 +140,14 @@ describe("loadConfig defaults", () => {
     expect(loaded.config.users.defaultAgentDirRoot).toBe(`${TEST_HOME_DIR}/.omo-daemonic/agents`)
     expect(loaded.config.defaults.maxRunning).toBe(5)
     expect(loaded.config.defaults.overlap).toBe("queue")
+    expect(loaded.config.defaults.loopMaxConsecutiveFailures).toBe(8)
+    expect(loaded.config.defaults.loopCadenceMs).toBe(250)
+    expect(loaded.config.defaults.loopBackoffFactor).toBe(3)
+    expect(loaded.config.defaults.loopCarryForwardBytes).toBe(4_096)
     expect(loaded.config.defaults.misfire).toBe("fire_once")
+    expect(loaded.config.hardCaps.loopMaxConsecutiveFailures).toBe(20)
+    expect(loaded.config.hardCaps.loopCheckTimeoutMs).toBe(1_200_000)
+    expect(loaded.config.limits.loopCheckTimeoutMs).toBe(900_000)
     expect(loaded.config.limits.schedulePreviewMaxCount).toBe(24)
     expect(loaded.config.trustedProxies).toEqual(["10.0.0.2"])
     expect(loaded.config.hardCaps.maxRunning).toBe(32)

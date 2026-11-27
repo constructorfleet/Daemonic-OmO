@@ -70,6 +70,36 @@ const CASES: readonly {
     message: "hardCaps.maxRunning",
   },
   {
+    name: "loop failure default above its admin hard cap",
+    jsonc: `{ "defaults": { "loopMaxConsecutiveFailures": 101 } }`,
+    paths: ["defaults.loopMaxConsecutiveFailures"],
+    message: "hardCaps.loopMaxConsecutiveFailures",
+  },
+  {
+    name: "loop check timeout above its admin hard cap",
+    jsonc: `{ "limits": { "loopCheckTimeoutMs": 7200001 } }`,
+    paths: ["limits.loopCheckTimeoutMs"],
+    message: "hardCaps.loopCheckTimeoutMs",
+  },
+  {
+    name: "loop wall default above a configured admin hard cap",
+    jsonc: `{ "hardCaps": { "loopMaxWallMs": 1000 }, "defaults": { "loopMaxWallMs": 1001 } }`,
+    paths: ["defaults.loopMaxWallMs"],
+    message: "hardCaps.loopMaxWallMs",
+  },
+  {
+    name: "loop backoff ceiling above its configured admin hard cap",
+    jsonc: `{ "hardCaps": { "loopBackoffMs": 1000 }, "defaults": { "loopBackoffMaxMs": 1001 } }`,
+    paths: ["defaults.loopBackoffMaxMs"],
+    message: "hardCaps.loopBackoffMs",
+  },
+  {
+    name: "loop carry-forward default above its configured admin hard cap",
+    jsonc: `{ "hardCaps": { "loopCarryForwardBytes": 1024 }, "defaults": { "loopCarryForwardBytes": 1025 } }`,
+    paths: ["defaults.loopCarryForwardBytes"],
+    message: "hardCaps.loopCarryForwardBytes",
+  },
+  {
     name: "default readBytes below the 64 KiB floor",
     jsonc: `{ "defaults": { "readBytes": 1024 } }`,
     paths: ["defaults.readBytes"],

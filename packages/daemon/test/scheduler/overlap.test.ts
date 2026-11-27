@@ -127,7 +127,7 @@ describe("caps and fairness", () => {
     expect([...rig.runsOf(a1), ...rig.runsOf(a2)].map((run) => run.state).sort()).toEqual(["closed", "queued"])
   })
 
-  test("a waiting loop holds no slot: a scheduled run starts beside it at maxRunning 1", async () => {
+  test("a waiting loop holds no slot, so an unrelated scheduled run can start", async () => {
     const rig = await schedulerRig({ wallMs: T0 })
     rig.gateway.runOnCreate = true
     rig.repos.loops.put(loopRow(rig.project, "waiting"), new Date(T0).toISOString())
@@ -175,6 +175,9 @@ describe("loop targets", () => {
     const loops: LoopLauncher = {
       parseTemplate: () => template,
       async tick() {},
+      async settled() {
+        return false
+      },
       launch(input) {
         launches.push(input)
         rig?.repos.loops.put(loopRow(input.project, "running", input), new Date(T0).toISOString())

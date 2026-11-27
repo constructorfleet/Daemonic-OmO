@@ -40,6 +40,12 @@ export interface DefaultsConfig {
   readonly maxRunningPerProject: number
   readonly loopMaxIterations: number
   readonly loopMaxWallMs: number
+  readonly loopMaxConsecutiveFailures: number
+  readonly loopCadenceMs: number
+  readonly loopBackoffInitialMs: number
+  readonly loopBackoffFactor: number
+  readonly loopBackoffMaxMs: number
+  readonly loopCarryForwardBytes: number
   readonly runTimeoutMs: number
   readonly overlap: OverlapPolicy
   readonly misfire: MisfirePolicy
@@ -57,6 +63,12 @@ export interface HardCapsConfig {
   readonly maxRunningPerProject: number
   readonly loopMaxIterations: number
   readonly loopMaxWallMs: number
+  readonly loopMaxConsecutiveFailures: number
+  readonly loopCheckTimeoutMs: number
+  readonly loopCadenceMs: number
+  readonly loopBackoffMs: number
+  readonly loopBackoffFactor: number
+  readonly loopCarryForwardBytes: number
   readonly runTimeoutMs: number
   readonly readBytes: number
 }
@@ -125,6 +137,12 @@ export const DEFAULT_DEFAULTS: DefaultsConfig = {
   maxRunningPerProject: 1,
   loopMaxIterations: 10,
   loopMaxWallMs: 14_400_000,
+  loopMaxConsecutiveFailures: 3,
+  loopCadenceMs: 0,
+  loopBackoffInitialMs: 1_000,
+  loopBackoffFactor: 2,
+  loopBackoffMaxMs: 60_000,
+  loopCarryForwardBytes: 8_192,
   runTimeoutMs: 7_200_000,
   overlap: "skip",
   misfire: "fire_once",
@@ -142,6 +160,12 @@ export const DEFAULT_HARD_CAPS: HardCapsConfig = {
   maxRunningPerProject: 16,
   loopMaxIterations: 100,
   loopMaxWallMs: 172_800_000,
+  loopMaxConsecutiveFailures: 100,
+  loopCheckTimeoutMs: 7_200_000,
+  loopCadenceMs: 172_800_000,
+  loopBackoffMs: 172_800_000,
+  loopBackoffFactor: 100,
+  loopCarryForwardBytes: 65_536,
   runTimeoutMs: 86_400_000,
   readBytes: 67_108_864,
 }

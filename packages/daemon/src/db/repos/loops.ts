@@ -6,6 +6,7 @@ import { RepositoryDataError, RevisionConflictError } from "./errors"
 import { parseJsonObject, parseRecord } from "./json"
 
 function isLoop(value: Record<string, unknown>): value is Record<string, unknown> & Loop {
+  const optionalStrings = ["worktreePath", "branch", "threadId", "sessionId", "sessionFile", "errorDetail"] as const
   return typeof value.id === "string" && parseUlid(value.id) !== null &&
     typeof value.userId === "string" && parseUlid(value.userId) !== null &&
     typeof value.projectId === "string" && parseUlid(value.projectId) !== null &&
@@ -21,6 +22,9 @@ function isLoop(value: Record<string, unknown>): value is Record<string, unknown
       value.state === "exhausted" || value.state === "failed" || value.state === "cancelled") &&
     typeof value.iteration === "number" && typeof value.consecutiveFailures === "number" &&
     (value.nextIterationAt === null || typeof value.nextIterationAt === "number") &&
+    optionalStrings.every((key) => value[key] === undefined || typeof value[key] === "string") &&
+    (value.activeRunId === undefined || (typeof value.activeRunId === "string" && parseUlid(value.activeRunId) !== null)) &&
+    (value.evaluatedRunId === undefined || (typeof value.evaluatedRunId === "string" && parseUlid(value.evaluatedRunId) !== null)) &&
     typeof value.revision === "number"
 }
 
@@ -66,6 +70,10 @@ export function createLoopRepository(db: Database, ledger: EventLedger) {
       if (loop.revision !== expectedRevision + 1) {
         throw new RangeError("loop revision must advance by one")
       }
+      const previous = this.get(loop.id)
+      if (previous === null) throw new RevisionConflictError(loop.id, expectedRevision)
+      const iterationStarted = previous.state === "running" && previous.activeRunId === undefined &&
+        loop.state === "running" && loop.activeRunId !== undefined && loop.iteration > 0
       ledger.transact((transaction) => {
         const changed = transaction.execute(
           `UPDATE loops SET state = ?, next_iteration_at = ?, updated_at = ?, json = ?, revision = ?
@@ -83,6 +91,17 @@ export function createLoopRepository(db: Database, ledger: EventLedger) {
           projectId: loop.projectId,
           data: parseJsonObject(JSON.stringify(loop), "loop"),
         })
+        if (iterationStarted) {
+          transaction.emit({
+            at,
+            type: "loop.iteration_started",
+            entityKind: "loop",
+            entityId: loop.id,
+            userId: loop.userId,
+            projectId: loop.projectId,
+            data: parseJsonObject(JSON.stringify(loop), "loop"),
+          })
+        }
       })
     },
   }

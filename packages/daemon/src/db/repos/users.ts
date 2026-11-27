@@ -40,9 +40,45 @@ function parseAllowedRoots(value: string): readonly string[] {
 
 function parseSettings(value: string): UserSettings {
   const settings = parseRecord(value, "user")
-  for (const key of ["maxRunning", "maxRunningPerProject", "runTimeoutMs", "readBytes", "loopMaxIterations"]) {
+  const keys = [
+    "maxRunning",
+    "maxRunningPerProject",
+    "runTimeoutMs",
+    "readBytes",
+    "loopMaxIterations",
+    "loopMaxWallMs",
+    "loopMaxConsecutiveFailures",
+    "loopCheckTimeoutMs",
+    "loopCadenceMs",
+    "loopBackoffInitialMs",
+    "loopBackoffFactor",
+    "loopBackoffMaxMs",
+    "loopCarryForwardBytes",
+  ] as const
+  for (const key of keys) {
     const setting = settings[key]
     if (setting !== undefined && typeof setting !== "number") throw new RepositoryDataError("user")
+  }
+  for (const key of [
+    "loopMaxIterations",
+    "loopMaxWallMs",
+    "loopMaxConsecutiveFailures",
+    "loopCheckTimeoutMs",
+    "loopCadenceMs",
+    "loopBackoffInitialMs",
+    "loopBackoffMaxMs",
+    "loopCarryForwardBytes",
+  ] as const) {
+    const setting = settings[key]
+    const minimum = key === "loopCadenceMs" || key === "loopBackoffInitialMs" ||
+      key === "loopBackoffMaxMs" || key === "loopCarryForwardBytes" ? 0 : 1
+    if (setting !== undefined && (typeof setting !== "number" || !Number.isSafeInteger(setting) || setting < minimum)) {
+      throw new RepositoryDataError("user")
+    }
+  }
+  if (settings.loopBackoffFactor !== undefined && (typeof settings.loopBackoffFactor !== "number" ||
+    !Number.isFinite(settings.loopBackoffFactor) || settings.loopBackoffFactor < 1)) {
+    throw new RepositoryDataError("user")
   }
   return {
     ...(typeof settings.maxRunning === "number" ? { maxRunning: settings.maxRunning } : {}),
@@ -52,6 +88,17 @@ function parseSettings(value: string): UserSettings {
     ...(typeof settings.readBytes === "number" ? { readBytes: settings.readBytes } : {}),
     ...(typeof settings.loopMaxIterations === "number"
       ? { loopMaxIterations: settings.loopMaxIterations } : {}),
+    ...(typeof settings.loopMaxWallMs === "number" ? { loopMaxWallMs: settings.loopMaxWallMs } : {}),
+    ...(typeof settings.loopMaxConsecutiveFailures === "number"
+      ? { loopMaxConsecutiveFailures: settings.loopMaxConsecutiveFailures } : {}),
+    ...(typeof settings.loopCheckTimeoutMs === "number" ? { loopCheckTimeoutMs: settings.loopCheckTimeoutMs } : {}),
+    ...(typeof settings.loopCadenceMs === "number" ? { loopCadenceMs: settings.loopCadenceMs } : {}),
+    ...(typeof settings.loopBackoffInitialMs === "number"
+      ? { loopBackoffInitialMs: settings.loopBackoffInitialMs } : {}),
+    ...(typeof settings.loopBackoffFactor === "number" ? { loopBackoffFactor: settings.loopBackoffFactor } : {}),
+    ...(typeof settings.loopBackoffMaxMs === "number" ? { loopBackoffMaxMs: settings.loopBackoffMaxMs } : {}),
+    ...(typeof settings.loopCarryForwardBytes === "number"
+      ? { loopCarryForwardBytes: settings.loopCarryForwardBytes } : {}),
   }
 }
 

@@ -30,7 +30,7 @@ export function scheduleRoutes(ctx: FeatureContext): readonly Route[] {
     return schedule
   }
 
-  function parseContext(project: Project) {
+  function parseContext(project: Project, actor: User) {
     const owner = ctx.repos.users.get(project.userId)
     return {
       now: ctx.clock.now(),
@@ -39,6 +39,8 @@ export function scheduleRoutes(ctx: FeatureContext): readonly Route[] {
       ...(project.settings.defaultModel === undefined ? {} : { defaultModel: project.settings.defaultModel }),
       ...(project.settings.defaultReasoning === undefined ? {} : { defaultReasoning: project.settings.defaultReasoning }),
       loops: ctx.services.get(LOOP_LAUNCHER),
+      actor,
+      project,
     }
   }
 
@@ -64,7 +66,7 @@ export function scheduleRoutes(ctx: FeatureContext): readonly Route[] {
           throw new ApiError("invalid_arguments", "schedules need a git project", { cwd: project.cwd })
         }
         try {
-          return json(schedules().create(project, parseScheduleCreate(body, parseContext(project))), 201)
+          return json(schedules().create(project, parseScheduleCreate(body, parseContext(project, principal.user))), 201)
         } catch (error) {
           if (error instanceof ScheduleStateError) throw stateConflict(error)
           throw error
@@ -85,7 +87,7 @@ export function scheduleRoutes(ctx: FeatureContext): readonly Route[] {
         const schedule = visibleSchedule(principal.user, params.id ?? "")
         const project = visibleProject(principal.user, schedule.projectId)
         try {
-          return json(schedules().patch(schedule, parseSchedulePatch(body, parseContext(project))))
+          return json(schedules().patch(schedule, parseSchedulePatch(body, parseContext(project, principal.user))))
         } catch (error) {
           if (error instanceof ScheduleStateError) throw stateConflict(error)
           throw error

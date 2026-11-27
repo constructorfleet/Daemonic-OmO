@@ -48,12 +48,33 @@ function cancelLoops(deps: KillSwitchDeps, userId: UserId, at: Iso): readonly Lo
     const loop = deps.repos.loops.get(id)
     if (loop === null) return []
     deps.repos.loops.update(
-      { ...loop, state: "cancelled", stopReason: "kill_switch", endedAt: at, nextIterationAt: null, revision: loop.revision + 1 },
+      {
+        ...loop,
+        state: "cancelling",
+        stopReason: "kill_switch",
+        nextIterationAt: null,
+        revision: loop.revision + 1,
+      },
       loop.revision,
       at,
     )
     return [loop.id]
   })
+}
+
+function finishCancelledLoops(deps: KillSwitchDeps, loops: readonly LoopId[], at: Iso): void {
+  for (const id of loops) {
+    const loop = deps.repos.loops.get(id)
+    if (loop === null) continue
+    const run = loop.activeRunId === undefined ? null : deps.repos.runs.get(loop.activeRunId)
+    if (run !== null && run.state !== "closed" && run.state !== "kept") continue
+    const { activeRunId: _activeRunId, ...rest } = loop
+    deps.repos.loops.update(
+      { ...rest, state: "cancelled", nextIterationAt: null, endedAt: at, revision: loop.revision + 1 },
+      loop.revision,
+      at,
+    )
+  }
 }
 
 /**
@@ -78,6 +99,7 @@ export async function engageKillSwitch(deps: KillSwitchDeps, actor: User, users:
       const result = await deps.engine.cancel(actor, run.id, "user")
       ;(result.uninterruptible ? uninterruptible : cancelled).push(run.id)
     }
+    finishCancelledLoops(deps, loops, new Date(deps.clock.now()).toISOString())
     auditKillSwitch(audit, "kill_switch.engage", userId, {
       actorId: actor.id, cancelled, uninterruptible, pausedSchedules: paused, cancelledLoops: loops,
     })

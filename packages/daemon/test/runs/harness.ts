@@ -31,7 +31,9 @@ export class TestGateway extends FakeGateway {
   readonly createRefusals: GatewayRefusal[] = []
   readonly closeRefusals: GatewayRefusal[] = []
   createGate: Promise<void> | null = null
+  closeGate: Promise<void> | null = null
   onCreateAttempt: (() => void) | null = null
+  onCloseAttempt: (() => void) | null = null
   gracefulCloseTimesOut = false
   /** omo starts the turn of a create-with-prompt, so a created thread reads `running` until it settles. */
   runOnCreate = false
@@ -55,6 +57,9 @@ export class TestGateway extends FakeGateway {
 
   override async close(args: CloseArgs): Promise<GatewayResult<CloseOutcome>> {
     this.stopCalls.push({ method: "close", args })
+    this.onCloseAttempt?.()
+    const gate = this.closeGate
+    if (gate !== null) await gate
     const refusal = this.closeRefusals.shift()
     if (refusal !== undefined) return refusal
     if (args.graceful === true && this.gracefulCloseTimesOut) return { kind: "ok", value: { closed: false, reason: "timeout" } }

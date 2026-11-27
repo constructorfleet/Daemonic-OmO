@@ -38,7 +38,7 @@ export function validateConfig(raw: Record<string, unknown>, context: ValidateCo
 
   const hardCaps = readHardCaps(reader, reader.section("hardCaps", raw.hardCaps))
   const defaults = readDefaults(reader, reader.section("defaults", raw.defaults), hardCaps)
-  const limits = readLimits(reader, reader.section("limits", raw.limits))
+  const limits = readLimits(reader, reader.section("limits", raw.limits), hardCaps)
   const users = readUsers(reader, reader.section("users", raw.users))
   const omo = readOmo(reader, reader.section("omo", raw.omo), context.omo)
   const oidc =

@@ -5,7 +5,7 @@ import { worktreeLocation } from "./worktree"
 export type RunTrigger =
   | { readonly kind: "adhoc"; readonly actor: UserId }
   | { readonly kind: "schedule"; readonly scheduleId: ScheduleId; readonly fireKey: string; readonly slotAt: Ms }
-  | { readonly kind: "loop"; readonly loopId: LoopId; readonly iteration: number; readonly fireKey: string }
+  | { readonly kind: "loop"; readonly loopId: LoopId; readonly iteration: number; readonly fireKey: string; readonly scheduleId?: ScheduleId }
   | { readonly kind: "retry"; readonly of: Run; readonly actor: UserId }
 
 /** `run_worktree`: a fresh daemon worktree for this run; `shared_worktree`: an existing one (a loop's, a retry's). */
@@ -19,6 +19,12 @@ export interface DecideInput {
   readonly spec: RunSpec
   readonly workspace: RunWorkspace
   readonly trigger: RunTrigger
+  readonly continuation?: {
+    readonly threadId: NonNullable<Run["threadId"]>
+    readonly sessionId: NonNullable<Run["sessionId"]>
+    readonly baselineBytes: number
+    readonly sessionFile?: string
+  }
 }
 
 export interface NewRunContext {
@@ -34,7 +40,13 @@ function origin(trigger: RunTrigger, id: RunId): Pick<Run, "fireKey" | "attempt"
     case "schedule":
       return { fireKey: trigger.fireKey, attempt: 1, scheduleId: trigger.scheduleId, slotAt: trigger.slotAt }
     case "loop":
-      return { fireKey: trigger.fireKey, attempt: 1, loopId: trigger.loopId, iteration: trigger.iteration }
+      return {
+        fireKey: trigger.fireKey,
+        attempt: 1,
+        loopId: trigger.loopId,
+        iteration: trigger.iteration,
+        ...(trigger.scheduleId === undefined ? {} : { scheduleId: trigger.scheduleId }),
+      }
     case "retry": {
       const { of } = trigger
       return {
@@ -79,6 +91,13 @@ export function newRun(input: DecideInput, context: NewRunContext): Run {
     name: `odm-${context.id}`,
     spec: input.spec,
     ...placement(input, context),
+    ...(input.trigger.kind === "loop" && input.continuation === undefined ? { transcriptBaselineBytes: 0 } : {}),
+    ...(input.continuation === undefined ? {} : {
+      threadId: input.continuation.threadId,
+      sessionId: input.continuation.sessionId,
+      ...(input.continuation.sessionFile === undefined ? {} : { sessionFile: input.continuation.sessionFile }),
+      transcriptBaselineBytes: input.continuation.baselineBytes,
+    }),
     state: "queued",
     outcome: null,
     cancelRequested: false,

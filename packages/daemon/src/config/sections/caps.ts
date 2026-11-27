@@ -26,6 +26,39 @@ export function readHardCaps(reader: Reader, raw: Record<string, unknown>): Hard
       raw.loopMaxWallMs,
       DEFAULT_HARD_CAPS.loopMaxWallMs,
     ),
+    loopMaxConsecutiveFailures: reader.integer(
+      "hardCaps.loopMaxConsecutiveFailures",
+      raw.loopMaxConsecutiveFailures,
+      DEFAULT_HARD_CAPS.loopMaxConsecutiveFailures,
+    ),
+    loopCheckTimeoutMs: reader.integer(
+      "hardCaps.loopCheckTimeoutMs",
+      raw.loopCheckTimeoutMs,
+      DEFAULT_HARD_CAPS.loopCheckTimeoutMs,
+    ),
+    loopCadenceMs: reader.integer(
+      "hardCaps.loopCadenceMs",
+      raw.loopCadenceMs,
+      DEFAULT_HARD_CAPS.loopCadenceMs,
+      0,
+    ),
+    loopBackoffMs: reader.integer(
+      "hardCaps.loopBackoffMs",
+      raw.loopBackoffMs,
+      DEFAULT_HARD_CAPS.loopBackoffMs,
+      0,
+    ),
+    loopBackoffFactor: reader.integer(
+      "hardCaps.loopBackoffFactor",
+      raw.loopBackoffFactor,
+      DEFAULT_HARD_CAPS.loopBackoffFactor,
+    ),
+    loopCarryForwardBytes: reader.integer(
+      "hardCaps.loopCarryForwardBytes",
+      raw.loopCarryForwardBytes,
+      DEFAULT_HARD_CAPS.loopCarryForwardBytes,
+      0,
+    ),
     runTimeoutMs: reader.integer(
       "hardCaps.runTimeoutMs",
       raw.runTimeoutMs,
@@ -67,6 +100,42 @@ export function readDefaults(
       raw.loopMaxWallMs,
       DEFAULT_DEFAULTS.loopMaxWallMs,
       { max: hardCaps.loopMaxWallMs, maxLabel: "hardCaps.loopMaxWallMs" },
+    ),
+    loopMaxConsecutiveFailures: reader.integer(
+      "defaults.loopMaxConsecutiveFailures",
+      raw.loopMaxConsecutiveFailures,
+      DEFAULT_DEFAULTS.loopMaxConsecutiveFailures,
+      { max: hardCaps.loopMaxConsecutiveFailures, maxLabel: "hardCaps.loopMaxConsecutiveFailures" },
+    ),
+    loopCadenceMs: reader.integer(
+      "defaults.loopCadenceMs",
+      raw.loopCadenceMs,
+      DEFAULT_DEFAULTS.loopCadenceMs,
+      { min: 0, max: hardCaps.loopCadenceMs, maxLabel: "hardCaps.loopCadenceMs" },
+    ),
+    loopBackoffInitialMs: reader.integer(
+      "defaults.loopBackoffInitialMs",
+      raw.loopBackoffInitialMs,
+      DEFAULT_DEFAULTS.loopBackoffInitialMs,
+      { min: 0, max: hardCaps.loopBackoffMs, maxLabel: "hardCaps.loopBackoffMs" },
+    ),
+    loopBackoffFactor: reader.integer(
+      "defaults.loopBackoffFactor",
+      raw.loopBackoffFactor,
+      DEFAULT_DEFAULTS.loopBackoffFactor,
+      { max: hardCaps.loopBackoffFactor, maxLabel: "hardCaps.loopBackoffFactor" },
+    ),
+    loopBackoffMaxMs: reader.integer(
+      "defaults.loopBackoffMaxMs",
+      raw.loopBackoffMaxMs,
+      DEFAULT_DEFAULTS.loopBackoffMaxMs,
+      { min: 0, max: hardCaps.loopBackoffMs, maxLabel: "hardCaps.loopBackoffMs" },
+    ),
+    loopCarryForwardBytes: reader.integer(
+      "defaults.loopCarryForwardBytes",
+      raw.loopCarryForwardBytes,
+      DEFAULT_DEFAULTS.loopCarryForwardBytes,
+      { min: 0, max: hardCaps.loopCarryForwardBytes, maxLabel: "hardCaps.loopCarryForwardBytes" },
     ),
     runTimeoutMs: reader.integer(
       "defaults.runTimeoutMs",

@@ -3,7 +3,18 @@ import { join } from "node:path"
 import { FsError, type Fs } from "../core/ports"
 import type { ThreadId } from "../core/types"
 
-const TAIL_BYTES = 64 * 1024
+export interface TranscriptSearch {
+  readonly file: string
+  readonly text: string
+  readonly baseline: number
+  readonly maxBytes: number
+}
+
+export interface SessionTail {
+  readonly file: string
+  readonly baseline: number
+  readonly maxBytes: number
+}
 
 /** The session file of a thread, found by globbing `<agentDir>/sessions/*\/*_<thread>.jsonl` (FINDINGS assertion 3). */
 export async function findSessionFile(fs: Fs, agentDir: string, thread: ThreadId): Promise<string | null> {
@@ -18,18 +29,27 @@ export async function findSessionFile(fs: Fs, agentDir: string, thread: ThreadId
   return null
 }
 
-/** Whether `text` was delivered into the session: its JSON-escaped form appears in the first `maxBytes`. */
-export async function transcriptContains(fs: Fs, file: string, text: string, maxBytes: number): Promise<boolean> {
+/** Whether a follow-up prompt was delivered after the stored transcript baseline. */
+export async function transcriptContainsSince(fs: Fs, search: TranscriptSearch): Promise<boolean> {
+  const { file, text, baseline, maxBytes } = search
   const { size } = await fs.stat(file)
-  const head = new TextDecoder().decode(await fs.readFileRange(file, 0, Math.min(size, maxBytes)))
-  return head.includes(JSON.stringify(text).slice(1, -1))
+  const start = Math.max(Math.min(baseline, size), size - maxBytes)
+  const bytes = await fs.readFileRange(file, start, size - start)
+  const tail = new TextDecoder().decode(bytes)
+  return tail.includes(JSON.stringify(text).slice(1, -1))
 }
 
 /** Whether the newest `message` entry of the session is the assistant's: the idle-plus-tail completion fallback. */
-export async function endsWithAssistant(fs: Fs, file: string): Promise<boolean> {
+export async function endsWithAssistant(fs: Fs, session: SessionTail): Promise<boolean> {
+  const { file, baseline, maxBytes } = session
   const { size } = await fs.stat(file)
-  const start = Math.max(0, size - TAIL_BYTES)
-  const lines = new TextDecoder().decode(await fs.readFileRange(file, start, size - start)).split("\n")
+  const start = Math.max(Math.min(baseline, size), size - maxBytes)
+  let text = new TextDecoder().decode(await fs.readFileRange(file, start, size - start))
+  if (start > baseline) {
+    const newline = text.indexOf("\n")
+    text = newline === -1 ? "" : text.slice(newline + 1)
+  }
+  const lines = text.split("\n")
   for (let index = lines.length - 1; index >= 0; index -= 1) {
     const role = messageRole(lines[index] ?? "")
     if (role !== null) return role === "assistant"

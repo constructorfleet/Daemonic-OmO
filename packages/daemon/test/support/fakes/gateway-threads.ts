@@ -86,6 +86,8 @@ export class FakeThreadStore {
     return this.threads.get(thread)
   }
 
+  restore(thread: ThreadId): void { Object.assign(this.require(thread), { state: "idle", visible: true }) }
+
   has(thread: ThreadId): boolean {
     return this.threads.has(thread)
   }

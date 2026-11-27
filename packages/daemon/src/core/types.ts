@@ -69,6 +69,14 @@ export interface UserSettings {
   readonly runTimeoutMs?: number
   readonly readBytes?: number
   readonly loopMaxIterations?: number
+  readonly loopMaxWallMs?: number
+  readonly loopMaxConsecutiveFailures?: number
+  readonly loopCheckTimeoutMs?: number
+  readonly loopCadenceMs?: number
+  readonly loopBackoffInitialMs?: number
+  readonly loopBackoffFactor?: number
+  readonly loopBackoffMaxMs?: number
+  readonly loopCarryForwardBytes?: number
 }
 
 export interface User {
@@ -222,6 +230,12 @@ export interface Loop extends LoopTemplate {
   readonly nextIterationAt: Ms | null
   readonly activeRunId?: RunId
   readonly evaluatedRunId?: RunId
+  readonly worktreePath?: string
+  readonly branch?: string
+  readonly threadId?: ThreadId
+  readonly sessionId?: SessionId
+  readonly sessionFile?: string
+  readonly errorDetail?: string
   readonly startedAt?: Iso
   readonly endedAt?: Iso
   readonly stopReason?: string
@@ -295,6 +309,11 @@ export interface Run {
   readonly threadId?: ThreadId
   readonly sessionId?: SessionId
   readonly sessionFile?: string
+  readonly transcriptBaselineBytes?: number
+  readonly completionBindingId?: string
+  readonly loopEvaluationDone?: boolean
+  readonly loopKeepThreadOpen?: boolean
+  readonly closePending?: boolean
   readonly state: RunState
   readonly outcome: RunOutcome | null
   readonly cancelRequested: boolean

@@ -16,7 +16,12 @@ function isRun(value: Record<string, unknown>): value is Record<string, unknown>
     typeof value.cancelRequested === "boolean" && Array.isArray(value.orphanChildren) &&
     typeof value.createdAt === "string" && typeof value.updatedAt === "string" &&
     typeof value.revision === "number" && value.spec !== null && typeof value.spec === "object" &&
-    (value.outcome === null || (value.outcome !== null && typeof value.outcome === "object"))
+    (value.outcome === null || (value.outcome !== null && typeof value.outcome === "object")) &&
+    (value.transcriptBaselineBytes === undefined || (typeof value.transcriptBaselineBytes === "number" && Number.isSafeInteger(value.transcriptBaselineBytes) && value.transcriptBaselineBytes >= 0)) &&
+    (value.completionBindingId === undefined || typeof value.completionBindingId === "string") &&
+    (value.loopEvaluationDone === undefined || typeof value.loopEvaluationDone === "boolean") &&
+    (value.loopKeepThreadOpen === undefined || typeof value.loopKeepThreadOpen === "boolean") &&
+    (value.closePending === undefined || typeof value.closePending === "boolean")
 }
 
 function decodeRun(json: string): Run {

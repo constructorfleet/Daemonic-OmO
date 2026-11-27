@@ -8,6 +8,8 @@ import {
   type ScheduleTarget,
   type ScheduleTrigger,
   type ThinkingLevel,
+  type Project,
+  type User,
 } from "../core/types"
 import { parseRunCreate } from "../runs/request"
 import type { LoopLauncher } from "./fire"
@@ -28,6 +30,8 @@ export interface ScheduleParseContext {
   readonly defaultModel?: string
   readonly defaultReasoning?: ThinkingLevel
   readonly loops: LoopLauncher | undefined
+  readonly actor: User
+  readonly project: Project
 }
 
 function invalid(message: string): never {
@@ -106,7 +110,7 @@ function parseTarget(value: unknown, context: ScheduleParseContext): ScheduleTar
     }
     case "loop":
       if (context.loops === undefined) return invalid("loop targets need the loop engine")
-      return { kind: "loop", template: context.loops.parseTemplate(raw.template) }
+      return { kind: "loop", template: context.loops.parseTemplate(raw.template, context.actor, context.project) }
     default:
       return invalid("target.kind must be run or loop")
   }

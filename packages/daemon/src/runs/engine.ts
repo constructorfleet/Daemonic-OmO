@@ -4,7 +4,7 @@ import { ServiceKey } from "../api/services"
 import type { Repositories } from "../auth/types"
 import type { Config } from "../config"
 import { ulid } from "../core/ids"
-import type { Clock, CompletionStatus, Fs, Gateway, Git, Rng, ThreadState, TimerHandle } from "../core/ports"
+import type { Clock, Fs, Gateway, Git, Rng, ThreadState, TimerHandle } from "../core/ports"
 import type { CancelReason, ProjectId, Run, RunId, ThreadId, User } from "../core/types"
 import { auditRun, type AuditDeps } from "./audit"
 import { newRun, retryWorkspace, type DecideInput } from "./decide"
@@ -38,6 +38,8 @@ export interface RunEngineDeps {
   readonly fs: Fs
   readonly config: RunConfig
   readonly worktreeRoot: string
+  /** Production startup disables dispatch until persisted loops and runs are reconciled. */
+  readonly dispatchEnabled?: boolean
   readonly waits?: Partial<EngineWaits>
   /** A lifecycle step failed outside any request (gateway exception, refused close); defaults to stderr. */
   readonly onError?: (error: unknown) => void
@@ -80,10 +82,6 @@ export interface RunEngine {
 
 export const RUNS = new ServiceKey<RunEngine>("runs")
 
-function settleOutcome(status: CompletionStatus): SettleOutcome {
-  return status === "completed" || status === "idle" ? { kind: "succeeded" } : { kind: "failed", reason: "turn_error" }
-}
-
 export function createRunEngine(deps: RunEngineDeps): RunEngine {
   const { db, repos, clock, rng, gateway, config } = deps
   const waits: EngineWaits = { ...DEFAULT_WAITS, ...deps.waits }
@@ -100,6 +98,7 @@ export function createRunEngine(deps: RunEngineDeps): RunEngine {
   let dispatchAgain = false
   let supervisor: TimerHandle | null = null
   let running = false
+  let dispatchEnabled = deps.dispatchEnabled ?? true
 
   const track = (work: Promise<unknown>): void => {
     const settled: Promise<void> = work.then(() => undefined, report).finally(() => inflight.delete(settled))
@@ -122,7 +121,9 @@ export function createRunEngine(deps: RunEngineDeps): RunEngine {
     maxKeptWorktreesPerProject: config.limits.maxKeptWorktreesPerProject,
     readBytes: config.defaults.readBytes,
     pendingCancel, timers, serial, track, report,
-    requestDispatch: () => track(dispatch()),
+    requestDispatch: () => {
+      if (dispatchEnabled) track(dispatch())
+    },
     evaluator: () => evaluator,
   }
 
@@ -136,10 +137,12 @@ export function createRunEngine(deps: RunEngineDeps): RunEngine {
   }
 
   async function dispatchOnce(): Promise<void> {
-    const queued = records.queued()
-    if (queued.length === 0) return
+    if (records.queued().length === 0) return
     const live = records.live()
     const holders = slotHolders(live, await threadStates(live))
+    const queued = records.queued().filter((run) =>
+      !isSpawnHeld(db, run.userId) && !records.waitsForPreviousLoopClose(run))
+    if (queued.length === 0) return
     const plan = planDispatch({
       queued,
       holders,
@@ -160,6 +163,7 @@ export function createRunEngine(deps: RunEngineDeps): RunEngine {
   }
 
   function dispatch(): Promise<void> {
+    if (!dispatchEnabled) return Promise.resolve()
     if (dispatching !== null) {
       dispatchAgain = true
       return dispatching
@@ -190,7 +194,12 @@ export function createRunEngine(deps: RunEngineDeps): RunEngine {
 
   const unsubscribe = gateway.onCompletion((event) => {
     const run = records.activeByThread(event.thread)
-    if (run !== null) track(serial(run.id, () => settleRun(core, run.id, settleOutcome(event.outcome.status))))
+    if (run !== null && run.completionBindingId === event.bindingId) {
+      const outcome: SettleOutcome = event.outcome.status === "completed" || event.outcome.status === "idle"
+        ? { kind: "succeeded" }
+        : { kind: "failed", reason: "turn_error" }
+      track(serial(run.id, () => settleRun(core, run.id, outcome)))
+    }
   })
 
   async function cancel(actor: User, id: RunId, reason: CancelReason): Promise<CancelResult> {
@@ -233,7 +242,12 @@ export function createRunEngine(deps: RunEngineDeps): RunEngine {
 
     dispatch,
 
-    recover: () => recoverRuns(core),
+    async recover() {
+      dispatchEnabled = false
+      await recoverRuns(core)
+      dispatchEnabled = true
+      await dispatch()
+    },
 
     start() {
       running = true
@@ -248,9 +262,7 @@ export function createRunEngine(deps: RunEngineDeps): RunEngine {
       if (supervisor === null) arm()
     },
 
-    setEvaluator(next) {
-      evaluator = next
-    },
+    setEvaluator(next) { evaluator = next },
 
     async idle() {
       while (inflight.size > 0) await Promise.all([...inflight])

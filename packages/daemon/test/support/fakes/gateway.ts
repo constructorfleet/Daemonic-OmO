@@ -113,6 +113,8 @@ export class FakeGateway implements Gateway {
     this.store.require(thread).state = state
   }
 
+  restoreThread(thread: ThreadId): void { this.store.restore(thread) }
+
   setThreadControls(thread: ThreadId, controls: readonly string[]): void {
     this.store.require(thread).controls = [...controls]
   }

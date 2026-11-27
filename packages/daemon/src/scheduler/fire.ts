@@ -4,7 +4,7 @@ import { ServiceKey } from "../api/services"
 import type { Repositories } from "../auth/types"
 import { ulid } from "../core/ids"
 import type { Clock, Rng } from "../core/ports"
-import type { LoopTemplate, Ms, Project, Run, RunSkipReason, RunSpec, Schedule, ScheduleId } from "../core/types"
+import type { LoopTemplate, Ms, Project, Run, RunSkipReason, RunSpec, Schedule, ScheduleId, User } from "../core/types"
 import { newRun } from "../runs/decide"
 import type { DecideInput, RunEngine } from "../runs/engine"
 import { readQueue, writeQueue, type QueuedFire } from "./queue"
@@ -21,9 +21,10 @@ export interface LoopLaunch {
 
 /** Provided by the loop engine (todo 18): parses a schedule's loop target and starts one loop per fire key. */
 export interface LoopLauncher {
-  parseTemplate(value: unknown): LoopTemplate
+  parseTemplate(value: unknown, actor: User, project: Project): LoopTemplate
   launch(input: LoopLaunch): void
   tick(now: Ms): Promise<void>
+  settled(run: Run): Promise<boolean>
 }
 
 export const LOOP_LAUNCHER = new ServiceKey<LoopLauncher>("loopLauncher")

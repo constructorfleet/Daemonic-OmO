@@ -6,8 +6,12 @@ import type { Clock } from "../core/ports"
 import type { ProjectId, Run, RunId, RunState, ThreadId, UserId } from "../core/types"
 import { nextState, type RunStep } from "./state-machine"
 
-export type RunPatch = Partial<Pick<Run,
-  "threadId" | "sessionId" | "sessionFile" | "cancelRequested" | "cancelReason" | "orphanChildren" | "errorDetail">>
+export type RunPatch = Omit<Partial<Pick<Run,
+  "threadId" | "sessionId" | "sessionFile" | "transcriptBaselineBytes" | "completionBindingId" |
+  "loopEvaluationDone" | "loopKeepThreadOpen" | "closePending" |
+  "cancelRequested" | "cancelReason" | "orphanChildren" | "errorDetail">>, "sessionFile"> & {
+    readonly sessionFile?: string | null
+  }
 
 export interface RunListFilter {
   readonly userId: UserId | null
@@ -40,6 +44,19 @@ export function createRunRecords(db: Database, repos: Repositories, clock: Clock
     return next
   }
 
+  function applyPatch(run: Run, patch: RunPatch): Run {
+    const { sessionFile, ...fields } = patch
+    const { sessionFile: previousFile, ...withoutFile } = run
+    const base = sessionFile === null ? withoutFile : run
+    return {
+      ...base,
+      ...fields,
+      ...(sessionFile === null ? {} : sessionFile === undefined
+        ? previousFile === undefined ? {} : { sessionFile: previousFile }
+        : { sessionFile }),
+    }
+  }
+
   return {
     get: (id: RunId): Run | null => repos.runs.get(id),
 
@@ -57,8 +74,7 @@ export function createRunRecords(db: Database, repos: Repositories, clock: Clock
       const position = nextState(run, step)
       const at = new Date(clock.now()).toISOString()
       return write(run, {
-        ...run,
-        ...patch,
+        ...applyPatch(run, patch),
         ...position,
         ...(step.kind === "activate" ? { activeAt: at } : {}),
         ...(step.kind === "settle" ? { settledAt: at } : {}),
@@ -69,10 +85,21 @@ export function createRunRecords(db: Database, repos: Repositories, clock: Clock
     },
 
     patch(run: Run, patch: RunPatch): Run {
-      return write(run, { ...run, ...patch, revision: run.revision + 1, updatedAt: new Date(clock.now()).toISOString() })
+      return write(run, { ...applyPatch(run, patch), revision: run.revision + 1, updatedAt: new Date(clock.now()).toISOString() })
     },
 
     queued: (): readonly Run[] => ids("SELECT id FROM runs WHERE state = 'queued' ORDER BY created_at, id"),
+
+    waitsForPreviousLoopClose(run: Run): boolean {
+      if (run.loopId === undefined || run.iteration === undefined) return false
+      const row = db.query<{ readonly pending: number }, [string, number]>(
+        `SELECT EXISTS(
+           SELECT 1 FROM runs WHERE loop_id = ? AND json_extract(json, '$.iteration') < ?
+             AND (state = 'evaluating' OR json_extract(json, '$.closePending') = 1)
+         ) AS pending`,
+      ).get(run.loopId, run.iteration)
+      return row !== null && row.pending === 1
+    },
 
     unfinished: (): readonly Run[] => ids(`SELECT id FROM runs WHERE state IN ${UNFINISHED} ORDER BY created_at, id`),
 
@@ -93,6 +120,9 @@ export function createRunRecords(db: Database, repos: Repositories, clock: Clock
         "SELECT id FROM runs WHERE state = 'closed' AND json_extract(json, '$.threadId') IN (SELECT value FROM json_each(?)) ORDER BY created_at, id",
         JSON.stringify(threads),
       ),
+
+    closedWithPendingClose: (): readonly Run[] =>
+      ids("SELECT id FROM runs WHERE state = 'closed' AND json_extract(json, '$.closePending') = 1 ORDER BY created_at, id"),
 
     withOrphans: (): readonly Run[] =>
       ids("SELECT id FROM runs WHERE state = 'closed' AND json_array_length(json, '$.orphanChildren') > 0 ORDER BY created_at, id"),
